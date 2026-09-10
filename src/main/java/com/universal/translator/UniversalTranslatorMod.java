@@ -8,7 +8,9 @@ import com.universal.translator.engine.TranslationEngine;
 import com.universal.translator.gui.TranslatorConfigScreen;
 import com.universal.translator.listener.ChatEventListener;
 import com.universal.translator.listener.KeybindHandler;
+import com.universal.translator.listener.ScreenEventListener;
 import com.universal.translator.listener.TooltipEventListener;
+import com.universal.translator.listener.WorldEventListener;
 import net.minecraft.client.Minecraft;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -73,6 +75,8 @@ public class UniversalTranslatorMod {
         // 7. Register Game Events on NeoForge Event Bus
         NeoForge.EVENT_BUS.register(new ChatEventListener(engine, config));
         NeoForge.EVENT_BUS.register(new TooltipEventListener(engine, config));
+        NeoForge.EVENT_BUS.register(new WorldEventListener(engine, config));
+        NeoForge.EVENT_BUS.register(new ScreenEventListener(engine, config));
         NeoForge.EVENT_BUS.register(new KeybindHandler());
 
         // 8. Register Client Commands (/translate & /translator)

@@ -4,8 +4,13 @@ import com.universal.translator.config.TranslatorConfig;
 import com.universal.translator.engine.TranslationEngine;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
+import net.minecraft.sounds.SoundEvents;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.ClientChatEvent;
 import net.neoforged.neoforge.client.event.ClientChatReceivedEvent;
@@ -15,9 +20,14 @@ import java.util.regex.Pattern;
 
 public class ChatEventListener {
 
-    // Regex to match Minecraft player chat prefixes with multiple title brackets: [Title] [Rank] <Player>, Player:
-    private static final Pattern SENDER_PATTERN = Pattern.compile(
+    // Regex to match Minecraft player chat prefixes: [Rank] [Title] <Player>, Player:
+    private static final Pattern PLAYER_PATTERN = Pattern.compile(
             "^(?<sender>(?:\\[[^\\]]+\\]\\s*)*(?:<[a-zA-Z0-9_\\uAC00-\\uD7A3]{1,20}>\\s*:?\\s*|[a-zA-Z0-9_\\uAC00-\\uD7A3]{2,20}:\\s+))(?<content>.+)$"
+    );
+
+    // Regex to match custom NPC dialogue formats: [NPC] Name: text, Name » text, 【Name】text, ★ Name ★ : text, Name > text
+    private static final Pattern NPC_DIALOGUE_PATTERN = Pattern.compile(
+            "^(?<npc>(?:[【\\[][^】\\]]+[】\\]]|[★☆✦◆◇][^★☆✦◆◇]+[★☆✦◆◇]|[a-zA-Z0-9_\\uAC00-\\uD7A3]{2,16})\\s*(?:»|:|—|-|>)\\s*)(?<dialogue>.+)$"
     );
 
     private final TranslationEngine engine;
@@ -75,7 +85,52 @@ public class ChatEventListener {
     @SubscribeEvent
     public void onSystemChat(ClientChatReceivedEvent.System event) {
         if (!config.translateSystemMessages) return;
+
+        // Action Bar Overlay Messages (displayed right above hotbar)
+        if (event.isOverlay()) {
+            handleActionBar(event);
+            return;
+        }
+
         handleChat(event);
+    }
+
+    /**
+     * In-place translation for Action Bar overlay messages (e.g. server timers, skill alerts, quest hints).
+     */
+    private void handleActionBar(ClientChatReceivedEvent.System event) {
+        Component message = event.getMessage();
+        if (message == null) return;
+
+        String rawText = message.getString();
+        if (rawText.isBlank() || isDecorativeSeparator(rawText)) return;
+
+        String tag = "[" + config.targetLanguage.toUpperCase() + "]";
+        if (rawText.contains(tag) || rawText.contains("[VI]") || rawText.contains("[EN]")) return;
+
+        if (!engine.needsTranslation(rawText)) return;
+
+        String dominantColor = extractColorCode(message, rawText);
+        String cached = engine.getCache().get(rawText.trim());
+
+        if (cached != null && !cached.isBlank()) {
+            event.setMessage(Component.literal(dominantColor + cached));
+            return;
+        }
+
+        // Not in cache: suppress the raw foreign action bar to prevent flashing, translate asynchronously
+        event.setCanceled(true);
+        engine.translateAsync(rawText.trim(), translated -> {
+            Minecraft client = Minecraft.getInstance();
+            if (client == null || client.gui == null) return;
+            client.execute(() -> {
+                if (translated != null && !translated.isBlank()) {
+                    client.gui.setOverlayMessage(Component.literal(dominantColor + translated), false);
+                } else {
+                    client.gui.setOverlayMessage(message, false);
+                }
+            });
+        });
     }
 
     /**
@@ -97,7 +152,7 @@ public class ChatEventListener {
             String found = null;
             while (m.find()) {
                 String c = m.group(1);
-                // Prioritize vibrant colors (yellow, gold, aqua, green, red, purple) over white/gray
+                // Prioritize vibrant colors over white/gray
                 if ("0123456789abcde".indexOf(c) >= 0 && !c.equals("7") && !c.equals("8") && !c.equals("f")) {
                     return "§" + c;
                 }
@@ -131,6 +186,24 @@ public class ChatEventListener {
         return "§f"; // Default to clean white
     }
 
+    /**
+     * Builds interactive translated component with hover-to-view-original and click-to-copy.
+     */
+    private Component buildInteractiveComponent(String prefix, String langTag, String dominantColor, String translatedText, String originalText, boolean isMention) {
+        String fullText = (isMention ? "§6§l🔔 §r" : "") + prefix + langTag + dominantColor + translatedText;
+        MutableComponent comp = Component.literal(fullText);
+
+        if (originalText != null && !originalText.isBlank()) {
+            Style interactiveStyle = comp.getStyle()
+                    .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
+                            Component.literal("§e§l[Bản Gốc / Original Text]§r\n§f" + originalText + "\n\n§a§o» Nhấp chuột để sao chép (Click to copy)")))
+                    .withClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, originalText));
+            comp.setStyle(interactiveStyle);
+        }
+
+        return comp;
+    }
+
     private void handleChat(ClientChatReceivedEvent event) {
         if (!config.masterEnabled || !config.chatTranslationEnabled || event == null) return;
         Component message = event.getMessage();
@@ -143,14 +216,19 @@ public class ChatEventListener {
         String tag = "[" + config.targetLanguage.toUpperCase() + "]";
         if (rawText.contains(tag) || rawText.contains("[VI]") || rawText.contains("[EN]") || rawText.contains("[TRANS]")) return;
 
-        // Extract sender prefix if present (e.g. "[주민] <HyIsNoob> ")
+        // Extract sender prefix if present (Player chat or Custom NPC dialogue)
         String senderPrefix = "";
         String textToTranslate = rawText.trim();
 
-        Matcher matcher = SENDER_PATTERN.matcher(textToTranslate);
-        if (matcher.find()) {
-            senderPrefix = matcher.group("sender");
-            textToTranslate = matcher.group("content").trim();
+        Matcher playerMatcher = PLAYER_PATTERN.matcher(textToTranslate);
+        Matcher npcMatcher = NPC_DIALOGUE_PATTERN.matcher(textToTranslate);
+
+        if (playerMatcher.find()) {
+            senderPrefix = playerMatcher.group("sender");
+            textToTranslate = playerMatcher.group("content").trim();
+        } else if (npcMatcher.find()) {
+            senderPrefix = npcMatcher.group("npc");
+            textToTranslate = npcMatcher.group("dialogue").trim();
         }
 
         // Skip decorative separator lines (e.g. "-----", "=====") to preserve server borders
@@ -159,10 +237,25 @@ public class ChatEventListener {
         }
 
         // Check if message is from the local player
-        if (config.ignoreSelfChat && !senderPrefix.isEmpty() && Minecraft.getInstance().getUser() != null) {
-            String myUsername = Minecraft.getInstance().getUser().getName();
-            if (senderPrefix.contains("<" + myUsername + ">") || senderPrefix.startsWith(myUsername + ":")) {
-                return;
+        Minecraft client = Minecraft.getInstance();
+        boolean isMention = false;
+
+        if (client != null && client.getUser() != null) {
+            String myUsername = client.getUser().getName();
+            if (config.ignoreSelfChat && !senderPrefix.isEmpty()) {
+                if (senderPrefix.contains("<" + myUsername + ">") || senderPrefix.startsWith(myUsername + ":")) {
+                    return;
+                }
+            }
+
+            // Check if local player is mentioned in the chat
+            if (!myUsername.isBlank() && rawText.toLowerCase().contains(myUsername.toLowerCase())) {
+                isMention = true;
+                // Play notification chime sound
+                try {
+                    client.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.EXPERIENCE_ORB_PICKUP, 1.2F));
+                } catch (Exception ignored) {
+                }
             }
         }
 
@@ -173,16 +266,18 @@ public class ChatEventListener {
         final String finalSender = senderPrefix;
         final String dominantColor = extractColorCode(message, rawText);
         final String langTag = "§b[" + config.targetLanguage.toUpperCase() + "] ";
+        final boolean finalMention = isMention;
 
         // Check if translation is already cached
         String cached = engine.getCache().get(contentToTranslate);
         if (cached != null && !cached.isBlank()) {
             if (config.chatReplaceMode) {
-                event.setMessage(Component.literal(finalSender + langTag + dominantColor + cached));
+                Component translatedComp = buildInteractiveComponent(finalSender, langTag, dominantColor, cached, contentToTranslate, finalMention);
+                event.setMessage(translatedComp);
             } else {
-                Minecraft client = Minecraft.getInstance();
                 if (client != null && client.gui != null && client.gui.getChat() != null) {
-                    client.gui.getChat().addMessage(Component.literal("  " + langTag + dominantColor + cached));
+                    Component translatedComp = Component.literal("  " + (finalMention ? "§6🔔 " : "") + langTag + dominantColor + cached);
+                    client.gui.getChat().addMessage(translatedComp);
                 }
             }
             return;
@@ -194,12 +289,12 @@ public class ChatEventListener {
             event.setCanceled(true);
 
             engine.translateAsync(contentToTranslate, translated -> {
-                Minecraft client = Minecraft.getInstance();
                 if (client == null || client.gui == null || client.gui.getChat() == null) return;
 
                 client.execute(() -> {
                     if (translated != null && !translated.isBlank() && !translated.equalsIgnoreCase(contentToTranslate)) {
-                        client.gui.getChat().addMessage(Component.literal(finalSender + langTag + dominantColor + translated));
+                        Component translatedComp = buildInteractiveComponent(finalSender, langTag, dominantColor, translated, contentToTranslate, finalMention);
+                        client.gui.getChat().addMessage(translatedComp);
                     } else {
                         client.gui.getChat().addMessage(message);
                     }
@@ -208,12 +303,11 @@ public class ChatEventListener {
         } else {
             // BELOW mode: let original show, add translated below with matching color
             engine.translateAsync(contentToTranslate, translated -> {
-                Minecraft client = Minecraft.getInstance();
                 if (client == null || client.gui == null || client.gui.getChat() == null) return;
 
                 client.execute(() -> {
-                    Component translatedComponent = Component.literal("  " + langTag + dominantColor + translated);
-                    client.gui.getChat().addMessage(translatedComponent);
+                    Component translatedComp = Component.literal("  " + (finalMention ? "§6🔔 " : "") + langTag + dominantColor + translated);
+                    client.gui.getChat().addMessage(translatedComp);
                 });
             });
         }
