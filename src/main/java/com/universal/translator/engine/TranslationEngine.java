@@ -21,7 +21,7 @@ import java.util.regex.Pattern;
 /**
  * Universal, high-performance, non-blocking translation engine.
  * Supports auto-detection of Korean, Japanese, Chinese, Russian, and any foreign language.
- * Connects to Google Translate Web API with MyMemory fallback and two-tier caching.
+ * Connects to Google Translate Web API with MyMemory fallback, exceptions, and two-tier caching.
  */
 public class TranslationEngine {
 
@@ -34,6 +34,9 @@ public class TranslationEngine {
             "\\u4e00-\\u9fff" + // CJK Unified Ideographs (Chinese/Kanji)
             "\\u0400-\\u04ff]"  // Cyrillic (Russian/Ukrainian)
     );
+
+    // Pure English / ASCII Latin pattern
+    private static final Pattern ASCII_LATIN_PATTERN = Pattern.compile("^[\\p{ASCII}]+$");
 
     private final TranslationCache cache;
     private final CustomLexicon lexicon;
@@ -69,21 +72,38 @@ public class TranslationEngine {
     }
 
     /**
-     * Checks if the text needs translation based on scripts and settings.
+     * Checks if the text needs translation based on scripts, exceptions, and settings.
      */
     public boolean needsTranslation(String text) {
+        if (!config.masterEnabled) return false;
         if (text == null || text.isBlank()) return false;
-        if (config.translateAllForeignText) {
-            return CJK_CYRILLIC_PATTERN.matcher(text).find() || (text.length() > 3 && !text.matches("^[\\x00-\\x7F]*$"));
+
+        String clean = text.trim();
+
+        // Check custom word exceptions
+        if (config.exceptionWords != null) {
+            for (String exc : config.exceptionWords) {
+                if (clean.equalsIgnoreCase(exc)) return false;
+            }
         }
-        return CJK_CYRILLIC_PATTERN.matcher(text).find();
+
+        // If ignoreEnglish is enabled and text is pure ASCII/English, do NOT translate
+        if (config.ignoreEnglish && ASCII_LATIN_PATTERN.matcher(clean).matches()) {
+            return false;
+        }
+
+        if (config.translateAllForeignText) {
+            return CJK_CYRILLIC_PATTERN.matcher(clean).find() || (clean.length() > 2 && !clean.matches("^[\\x00-\\x7F]*$"));
+        }
+
+        return CJK_CYRILLIC_PATTERN.matcher(clean).find();
     }
 
     /**
      * Asynchronously translates the given text and invokes callback with result.
      */
     public void translateAsync(String rawText, Consumer<String> callback) {
-        if (rawText == null || rawText.isBlank() || !needsTranslation(rawText)) {
+        if (!config.masterEnabled || rawText == null || rawText.isBlank() || !needsTranslation(rawText)) {
             return;
         }
 

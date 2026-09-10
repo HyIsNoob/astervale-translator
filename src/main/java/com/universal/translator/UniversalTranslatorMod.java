@@ -1,15 +1,25 @@
 package com.universal.translator;
 
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.universal.translator.config.TranslatorConfig;
 import com.universal.translator.engine.CustomLexicon;
 import com.universal.translator.engine.TranslationCache;
 import com.universal.translator.engine.TranslationEngine;
+import com.universal.translator.gui.TranslatorConfigScreen;
 import com.universal.translator.listener.ChatEventListener;
+import com.universal.translator.listener.KeybindHandler;
 import com.universal.translator.listener.TooltipEventListener;
+import net.minecraft.client.Minecraft;
+import net.minecraft.commands.Commands;
+import net.minecraft.network.chat.Component;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModLoadingContext;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.loading.FMLPaths;
+import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.common.NeoForge;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,11 +64,43 @@ public class UniversalTranslatorMod {
         // 4. Initialize Universal Translation Engine
         engine = new TranslationEngine(cache, lexicon, config);
 
-        // 5. Register Event Listeners on NeoForge Game Event Bus
+        // 5. Register Key Mapping on Mod Event Bus
+        modEventBus.addListener(RegisterKeyMappingsEvent.class, KeybindHandler::onRegisterKeyMappings);
+
+        // 6. Register NeoForge Config Screen Factory (Pause Menu -> Mods -> Config)
+        ModLoadingContext.get().registerExtensionPoint(IConfigScreenFactory.class, () -> (minecraft, screen) -> new TranslatorConfigScreen(screen));
+
+        // 7. Register Game Events on NeoForge Event Bus
         NeoForge.EVENT_BUS.register(new ChatEventListener(engine, config));
         NeoForge.EVENT_BUS.register(new TooltipEventListener(engine, config));
+        NeoForge.EVENT_BUS.register(new KeybindHandler());
 
-        // 6. Register Shutdown Hook for clean cache flushing
+        // 8. Register Client Commands (/translate & /translator)
+        NeoForge.EVENT_BUS.addListener(RegisterClientCommandsEvent.class, event -> {
+            // /translator -> Opens GUI
+            event.getDispatcher().register(Commands.literal("translator").executes(context -> {
+                Minecraft.getInstance().execute(() -> Minecraft.getInstance().setScreen(new TranslatorConfigScreen(null)));
+                return 1;
+            }));
+
+            // /translate <text> -> Tests translation in chat directly
+            event.getDispatcher().register(Commands.literal("translate")
+                    .then(Commands.argument("text", StringArgumentType.greedyString()).executes(context -> {
+                        String input = StringArgumentType.getString(context, "text");
+                        engine.translateAsync(input, translated -> {
+                            Minecraft client = Minecraft.getInstance();
+                            if (client != null && client.gui != null && client.gui.getChat() != null) {
+                                client.execute(() -> {
+                                    client.gui.getChat().addMessage(Component.literal("§7[Gốc]: §f" + input));
+                                    client.gui.getChat().addMessage(Component.literal(config.chatPrefix + translated));
+                                });
+                            }
+                        });
+                        return 1;
+                    })));
+        });
+
+        // 9. Shutdown Hook
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             LOGGER.info("Flushing {} cache before exit...", NAME);
             engine.shutdown();
