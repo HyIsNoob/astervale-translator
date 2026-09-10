@@ -116,6 +116,11 @@ public class CustomLexicon {
         return processed;
     }
 
+    public String lookupExact(String text) {
+        if (text == null || text.isBlank() || lexicon.isEmpty()) return null;
+        return lexicon.get(text.trim());
+    }
+
     public Map<String, String> getLexicon() {
         return lexicon;
     }

@@ -87,11 +87,11 @@ public class UniversalTranslatorMod {
             event.getDispatcher().register(Commands.literal("translate")
                     .then(Commands.argument("text", StringArgumentType.greedyString()).executes(context -> {
                         String input = StringArgumentType.getString(context, "text");
-                        engine.translateAsync(input, translated -> {
+                        engine.translateDirectAsync(input, translated -> {
                             Minecraft client = Minecraft.getInstance();
                             if (client != null && client.gui != null && client.gui.getChat() != null) {
                                 client.execute(() -> {
-                                    client.gui.getChat().addMessage(Component.literal("§7[Gốc]: §f" + input));
+                                    client.gui.getChat().addMessage(Component.literal("§7[Orig]: §f" + input));
                                     client.gui.getChat().addMessage(Component.literal(config.chatPrefix + translated));
                                 });
                             }

@@ -73,7 +73,8 @@ public class TranslatorConfigScreen extends Screen {
         clearCacheButton = addRenderableWidget(Button.builder(Component.literal("Clear Cache"), btn -> {
             if (engine != null && engine.getCache() != null) {
                 int count = engine.getCache().size();
-                testResult = "Cache cleared (" + count + " items reset).";
+                engine.getCache().clear();
+                testResult = "Cache cleared (" + count + " items wiped).";
             }
         }).bounds(centerX + 5, startY + 48, btnWidth, btnHeight).build());
 
@@ -91,8 +92,8 @@ public class TranslatorConfigScreen extends Screen {
                 testResult = "Please enter text to translate!";
                 return;
             }
-            testResult = "Requesting translation...";
-            engine.translateAsync(input, res -> {
+            testResult = "Translating...";
+            engine.translateDirectAsync(input, res -> {
                 if (minecraft != null) {
                     minecraft.execute(() -> {
                         testResult = res;

@@ -128,7 +128,26 @@ public class TranslationEngine {
     }
 
     /**
-     * Synchronous translation call (preprocesses lexicon, queries Google / MyMemory).
+     * Direct asynchronous translation bypassing filters (used for live GUI testing and commands).
+     */
+    public void translateDirectAsync(String rawText, Consumer<String> callback) {
+        if (rawText == null || rawText.isBlank()) {
+            callback.accept("Empty input text");
+            return;
+        }
+        String trimmed = rawText.trim();
+        executor.submit(() -> {
+            try {
+                String translated = translateSync(trimmed);
+                callback.accept(translated != null && !translated.isBlank() ? translated : trimmed);
+            } catch (Exception e) {
+                callback.accept("Translation error: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Synchronous translation call (Primary: Google Mobile HTML, Secondary: Google GTX, Tertiary: MyMemory, Fallback: Lexicon).
      */
     public String translateSync(String text) {
         if (text == null || text.isBlank()) return text;
@@ -138,22 +157,35 @@ public class TranslationEngine {
         String cached = cache.get(clean);
         if (cached != null) return cached;
 
-        // 2. Apply Custom Lexicon
-        String preprocessed = lexicon.applyPreprocess(clean);
-        if (!needsTranslation(preprocessed)) {
-            cache.put(clean, preprocessed);
-            return preprocessed;
+        // 2. Check exact match in custom lexicon (instant for items/terms)
+        String exactLexicon = lexicon.lookupExact(clean);
+        if (exactLexicon != null) {
+            cache.put(clean, exactLexicon);
+            return exactLexicon;
         }
 
         String sl = config.sourceLanguage != null ? config.sourceLanguage : "auto";
         String tl = config.targetLanguage != null ? config.targetLanguage : "vi";
 
-        // 3. Query Google Translate (Primary)
-        String translated = queryGoogleTranslate(preprocessed, sl, tl);
+        // 3. Primary: Google Mobile Web Engine (High reliability, bypasses 429 rate limit)
+        String translated = queryGoogleMobile(clean, sl, tl);
 
-        // 4. Fallback to MyMemory if Google failed
+        // 4. Secondary: Google GTX API
         if (translated == null || translated.isBlank()) {
-            translated = queryMyMemory(preprocessed, sl, tl);
+            translated = queryGoogleGtx(clean, sl, tl);
+        }
+
+        // 5. Tertiary: MyMemory API
+        if (translated == null || translated.isBlank()) {
+            translated = queryMyMemory(clean, sl, tl);
+        }
+
+        // 6. Offline Fallback: Custom Lexicon replacement (only if all online services failed)
+        if (translated == null || translated.isBlank()) {
+            String fallbackLexicon = lexicon.applyPreprocess(clean);
+            if (!fallbackLexicon.equals(clean)) {
+                translated = fallbackLexicon;
+            }
         }
 
         if (translated != null && !translated.isBlank()) {
@@ -161,17 +193,52 @@ public class TranslationEngine {
             return translated;
         }
 
-        return preprocessed;
+        return clean;
     }
 
-    private String queryGoogleTranslate(String text, String sl, String tl) {
+    private static final Pattern RESULT_CONTAINER_PATTERN = Pattern.compile("(?s)<div[^>]*class=\"result-container\"[^>]*>(.*?)</div>");
+    private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]+>");
+    private static final Pattern NUMERIC_ENTITY_PATTERN = Pattern.compile("&#(\\d+);");
+    private static final Pattern HEX_ENTITY_PATTERN = Pattern.compile("&#x([0-9a-fA-F]+);");
+
+    private String queryGoogleMobile(String text, String sl, String tl) {
+        try {
+            String encoded = URLEncoder.encode(text, StandardCharsets.UTF_8);
+            String url = String.format("https://translate.google.com/m?sl=%s&tl=%s&q=%s", sl, tl, encoded);
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(5))
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                    .header("Accept-Language", "en-US,en;q=0.9")
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (response.statusCode() == 200) {
+                String body = response.body();
+                java.util.regex.Matcher m = RESULT_CONTAINER_PATTERN.matcher(body);
+                if (m.find()) {
+                    String rawResult = m.group(1);
+                    String cleanResult = HTML_TAG_PATTERN.matcher(rawResult).replaceAll("");
+                    return unescapeHtml(cleanResult.trim());
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.debug("Google Mobile translation error: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    private String queryGoogleGtx(String text, String sl, String tl) {
         try {
             String encoded = URLEncoder.encode(text, StandardCharsets.UTF_8);
             String url = String.format("https://translate.googleapis.com/translate_a/single?client=gtx&sl=%s&tl=%s&dt=t&q=%s", sl, tl, encoded);
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
-                    .timeout(Duration.ofSeconds(3))
+                    .timeout(Duration.ofSeconds(4))
                     .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
                     .GET()
                     .build();
@@ -181,7 +248,7 @@ public class TranslationEngine {
                 return parseGoogleTranslateJson(response.body());
             }
         } catch (Exception e) {
-            LOGGER.debug("Google Translate request error: {}", e.getMessage());
+            LOGGER.debug("Google GTX Translate request error: {}", e.getMessage());
         }
         return null;
     }
@@ -194,7 +261,7 @@ public class TranslationEngine {
 
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
-                    .timeout(Duration.ofSeconds(4))
+                    .timeout(Duration.ofSeconds(6))
                     .header("User-Agent", "UniversalTranslator/1.0")
                     .GET()
                     .build();
@@ -207,7 +274,7 @@ public class TranslationEngine {
                     if (resData != null && resData.isJsonObject()) {
                         JsonElement transText = resData.getAsJsonObject().get("translatedText");
                         if (transText != null && transText.isJsonPrimitive()) {
-                            return transText.getAsString().trim();
+                            return unescapeHtml(transText.getAsString().trim());
                         }
                     }
                 }
@@ -216,6 +283,39 @@ public class TranslationEngine {
             LOGGER.debug("MyMemory request error: {}", e.getMessage());
         }
         return null;
+    }
+
+    private String unescapeHtml(String input) {
+        if (input == null || input.isEmpty()) return input;
+        String s = input.replace("&quot;", "\"")
+                        .replace("&apos;", "'")
+                        .replace("&#39;", "'")
+                        .replace("&amp;", "&")
+                        .replace("&lt;", "<")
+                        .replace("&gt;", ">")
+                        .replace("&nbsp;", " ");
+
+        java.util.regex.Matcher numMatcher = NUMERIC_ENTITY_PATTERN.matcher(s);
+        StringBuilder sb = new StringBuilder();
+        while (numMatcher.find()) {
+            try {
+                int code = Integer.parseInt(numMatcher.group(1));
+                numMatcher.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(String.valueOf((char) code)));
+            } catch (Exception ignored) {}
+        }
+        numMatcher.appendTail(sb);
+        s = sb.toString();
+
+        java.util.regex.Matcher hexMatcher = HEX_ENTITY_PATTERN.matcher(s);
+        sb = new StringBuilder();
+        while (hexMatcher.find()) {
+            try {
+                int code = Integer.parseInt(hexMatcher.group(1), 16);
+                hexMatcher.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(String.valueOf((char) code)));
+            } catch (Exception ignored) {}
+        }
+        hexMatcher.appendTail(sb);
+        return sb.toString();
     }
 
     private String parseGoogleTranslateJson(String jsonStr) {

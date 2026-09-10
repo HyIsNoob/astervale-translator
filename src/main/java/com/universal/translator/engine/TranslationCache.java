@@ -89,4 +89,17 @@ public class TranslationCache {
     public int size() {
         return cache.size();
     }
+
+    public synchronized void clear() {
+        cache.clear();
+        dirty.set(false);
+        if (cacheFilePath != null) {
+            try {
+                Files.deleteIfExists(cacheFilePath);
+                LOGGER.info("Cleared translation cache memory and deleted cache file: {}", cacheFilePath);
+            } catch (Exception e) {
+                LOGGER.warn("Failed to delete translation cache file: {}", e.getMessage());
+            }
+        }
+    }
 }
