@@ -44,6 +44,7 @@ public class TranslationEngine {
     private final HttpClient httpClient;
     private final ExecutorService executor;
     private final ScheduledExecutorService scheduler;
+    private final java.util.Set<String> inFlightRequests = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public TranslationEngine(TranslationCache cache, CustomLexicon lexicon, TranslatorConfig config) {
         this.cache = cache;
@@ -114,6 +115,11 @@ public class TranslationEngine {
             return;
         }
 
+        // Deduplicate in-flight requests: if already being translated, don't spam duplicate tasks
+        if (!inFlightRequests.add(trimmed)) {
+            return;
+        }
+
         executor.submit(() -> {
             try {
                 String translated = translateSync(trimmed);
@@ -123,6 +129,8 @@ public class TranslationEngine {
                 }
             } catch (Exception e) {
                 LOGGER.debug("Async translation error for '{}': {}", trimmed, e.getMessage());
+            } finally {
+                inFlightRequests.remove(trimmed);
             }
         });
     }
