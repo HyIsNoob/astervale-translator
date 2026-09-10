@@ -23,10 +23,13 @@ public class TranslatorConfig {
     // Translation Features
     public boolean chatTranslationEnabled = true;
     public boolean tooltipTranslationEnabled = true;
+    public boolean tooltipHoldShift = false; // If true, only show translated tooltips when holding SHIFT
+    public boolean translateSystemMessages = true; // Translate system & server announcements
+    public boolean ignoreSelfChat = true; // Don't translate own chat messages
     public boolean translateItemName = true;
     public boolean translateItemLore = true;
 
-    // Language Target: "vi" (Vietnamese) or "en" (English) or custom
+    // Language Target: "vi", "en", "ja", "ko", etc.
     public String targetLanguage = "vi";
     public String sourceLanguage = "auto";
 
@@ -79,6 +82,9 @@ public class TranslatorConfig {
                 this.masterEnabled = loaded.masterEnabled;
                 this.chatTranslationEnabled = loaded.chatTranslationEnabled;
                 this.tooltipTranslationEnabled = loaded.tooltipTranslationEnabled;
+                this.tooltipHoldShift = loaded.tooltipHoldShift;
+                this.translateSystemMessages = loaded.translateSystemMessages;
+                this.ignoreSelfChat = loaded.ignoreSelfChat;
                 this.translateItemName = loaded.translateItemName;
                 this.translateItemLore = loaded.translateItemLore;
                 this.targetLanguage = loaded.targetLanguage != null ? loaded.targetLanguage : this.targetLanguage;
@@ -120,21 +126,39 @@ public class TranslatorConfig {
         save();
     }
 
+    public void toggleTooltipHoldShift() {
+        this.tooltipHoldShift = !this.tooltipHoldShift;
+        save();
+    }
+
+    public void toggleSystemMessages() {
+        this.translateSystemMessages = !this.translateSystemMessages;
+        save();
+    }
+
+    public void toggleIgnoreSelfChat() {
+        this.ignoreSelfChat = !this.ignoreSelfChat;
+        save();
+    }
+
     public void toggleIgnoreEnglish() {
         this.ignoreEnglish = !this.ignoreEnglish;
         save();
     }
 
+    public SupportedLanguage getSupportedLanguage() {
+        return SupportedLanguage.fromCode(this.targetLanguage);
+    }
+
     public void cycleTargetLanguage() {
-        if ("vi".equalsIgnoreCase(this.targetLanguage)) {
-            this.targetLanguage = "en";
-            this.chatPrefix = "  §b[EN] §f";
-            this.tooltipPrefix = "§b[EN] §7";
-        } else {
-            this.targetLanguage = "vi";
-            this.chatPrefix = "  §b[VI] §f";
-            this.tooltipPrefix = "§b[VI] §7";
-        }
+        SupportedLanguage next = getSupportedLanguage().next();
+        this.targetLanguage = next.getCode();
+        this.chatPrefix = "  §b[" + next.getCode().toUpperCase() + "] §f";
+        this.tooltipPrefix = "§b[" + next.getCode().toUpperCase() + "] §7";
         save();
+    }
+
+    public Path getConfigFile() {
+        return configFile;
     }
 }

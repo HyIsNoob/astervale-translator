@@ -32,6 +32,7 @@ public class ChatEventListener {
 
     @SubscribeEvent
     public void onSystemChat(ClientChatReceivedEvent.System event) {
+        if (!config.translateSystemMessages) return;
         handleChat(event.getMessage());
     }
 
@@ -42,7 +43,8 @@ public class ChatEventListener {
         if (rawText.isBlank()) return;
 
         // Skip messages that already contain translation tag
-        if (rawText.contains("[VI]") || rawText.contains("[TRANS]")) return;
+        String tag = "[" + config.targetLanguage.toUpperCase() + "]";
+        if (rawText.contains(tag) || rawText.contains("[VI]") || rawText.contains("[EN]") || rawText.contains("[TRANS]")) return;
 
         // Extract sender prefix if present (e.g. "<HyIsNoob> ")
         String senderPrefix = "";
@@ -52,6 +54,14 @@ public class ChatEventListener {
         if (matcher.find()) {
             senderPrefix = matcher.group("sender");
             textToTranslate = matcher.group("content").trim();
+        }
+
+        // Check if message is from the local player
+        if (config.ignoreSelfChat && !senderPrefix.isEmpty() && Minecraft.getInstance().getUser() != null) {
+            String myUsername = Minecraft.getInstance().getUser().getName();
+            if (senderPrefix.contains("<" + myUsername + ">") || senderPrefix.startsWith(myUsername + ":")) {
+                return;
+            }
         }
 
         // Check if message content needs translation
