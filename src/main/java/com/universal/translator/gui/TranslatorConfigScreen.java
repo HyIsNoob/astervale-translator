@@ -29,6 +29,7 @@ public class TranslatorConfigScreen extends Screen {
     private Button outgoingTargetButton;
     private Button ignoreEnglishButton;
     private Button systemChatButton;
+    private Button selfChatButton;
     private Button openFolderButton;
     private Button clearCacheButton;
 
@@ -145,15 +146,22 @@ public class TranslatorConfigScreen extends Screen {
           .tooltip(Tooltip.create(Component.literal("Translate system notices, server broadcasts, and action bar text.")))
           .build());
 
-        // Row 6: Open Config Folder & Clear Cache
-        openFolderButton = addRenderableWidget(Button.builder(Component.literal("Open Config Folder"), btn -> {
+        // Row 6: Translate Self Chat & (Open Folder / Clear Cache)
+        selfChatButton = addRenderableWidget(Button.builder(getSelfChatButtonText(), btn -> {
+            config.toggleIgnoreSelfChat();
+            btn.setMessage(getSelfChatButtonText());
+        }).bounds(centerX - 160, startY + 110, btnWidth, btnHeight)
+          .tooltip(Tooltip.create(Component.literal("Translate your own chat messages.\nTurn ON for offline testing & debugging, OFF for normal gameplay.")))
+          .build());
+
+        openFolderButton = addRenderableWidget(Button.builder(Component.literal("Open Folder"), btn -> {
             try {
                 Path configDir = net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get();
                 net.minecraft.Util.getPlatform().openPath(configDir);
             } catch (Exception e) {
                 testResult = "Error opening folder: " + e.getMessage();
             }
-        }).bounds(centerX - 160, startY + 110, btnWidth, btnHeight)
+        }).bounds(centerX + 5, startY + 110, 75, btnHeight)
           .tooltip(Tooltip.create(Component.literal("Open the Minecraft config directory to view or edit custom lexicon files.")))
           .build());
 
@@ -163,7 +171,7 @@ public class TranslatorConfigScreen extends Screen {
                 engine.getCache().clear();
                 testResult = "Cache wiped (" + count + " items reset).";
             }
-        }).bounds(centerX + 5, startY + 110, btnWidth, btnHeight)
+        }).bounds(centerX + 85, startY + 110, 75, btnHeight)
           .tooltip(Tooltip.create(Component.literal("Wipe both memory and disk translation cache files to reset all stored translations.")))
           .build());
 
@@ -244,6 +252,10 @@ public class TranslatorConfigScreen extends Screen {
 
     private Component getIgnoreEnglishButtonText() {
         return Component.literal("Ignore English: " + (config.ignoreEnglish ? "§aON" : "§cOFF"));
+    }
+
+    private Component getSelfChatButtonText() {
+        return Component.literal("Translate Self: " + (!config.ignoreSelfChat ? "§aON" : "§cOFF"));
     }
 
     @Override
