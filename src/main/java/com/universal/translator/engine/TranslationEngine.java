@@ -150,22 +150,38 @@ public class TranslationEngine {
      * Synchronous translation call (Primary: Google Mobile HTML, Secondary: Google GTX, Tertiary: MyMemory, Fallback: Lexicon).
      */
     public String translateSync(String text) {
+        String sl = config.sourceLanguage != null ? config.sourceLanguage : "auto";
+        String tl = config.targetLanguage != null ? config.targetLanguage : "vi";
+        return translateSyncTarget(text, sl, tl);
+    }
+
+    /**
+     * Synchronous translation call for any source and target language pair.
+     */
+    public String translateSyncTarget(String text, String sl, String tl) {
         if (text == null || text.isBlank()) return text;
         String clean = text.trim();
 
         // 1. Check Cache
-        String cached = cache.get(clean);
+        String cacheKey = "[" + tl + "]" + clean;
+        String cached = cache.get(cacheKey);
         if (cached != null) return cached;
 
-        // 2. Check exact match in custom lexicon (instant for items/terms)
-        String exactLexicon = lexicon.lookupExact(clean);
-        if (exactLexicon != null) {
-            cache.put(clean, exactLexicon);
-            return exactLexicon;
+        // Also check un-prefixed cache if target matches default
+        if (tl.equalsIgnoreCase(config.targetLanguage)) {
+            String defaultCached = cache.get(clean);
+            if (defaultCached != null) return defaultCached;
         }
 
-        String sl = config.sourceLanguage != null ? config.sourceLanguage : "auto";
-        String tl = config.targetLanguage != null ? config.targetLanguage : "vi";
+        // 2. Check exact match in custom lexicon (if translating to Vietnamese)
+        if ("vi".equalsIgnoreCase(tl)) {
+            String exactLexicon = lexicon.lookupExact(clean);
+            if (exactLexicon != null) {
+                cache.put(cacheKey, exactLexicon);
+                cache.put(clean, exactLexicon);
+                return exactLexicon;
+            }
+        }
 
         // 3. Primary: Google Mobile Web Engine (High reliability, bypasses 429 rate limit)
         String translated = queryGoogleMobile(clean, sl, tl);
@@ -180,16 +196,21 @@ public class TranslationEngine {
             translated = queryMyMemory(clean, sl, tl);
         }
 
-        // 6. Offline Fallback: Custom Lexicon replacement (only if all online services failed)
+        // 6. Offline Fallback: Custom Lexicon replacement
         if (translated == null || translated.isBlank()) {
-            String fallbackLexicon = lexicon.applyPreprocess(clean);
-            if (!fallbackLexicon.equals(clean)) {
-                translated = fallbackLexicon;
+            if ("vi".equalsIgnoreCase(tl)) {
+                String fallbackLexicon = lexicon.applyPreprocess(clean);
+                if (!fallbackLexicon.equals(clean)) {
+                    translated = fallbackLexicon;
+                }
             }
         }
 
         if (translated != null && !translated.isBlank()) {
-            cache.put(clean, translated);
+            cache.put(cacheKey, translated);
+            if (tl.equalsIgnoreCase(config.targetLanguage)) {
+                cache.put(clean, translated);
+            }
             return translated;
         }
 

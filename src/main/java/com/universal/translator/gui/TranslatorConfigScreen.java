@@ -21,11 +21,13 @@ public class TranslatorConfigScreen extends Screen {
     private Button masterButton;
     private Button targetLangButton;
     private Button chatButton;
-    private Button systemChatButton;
+    private Button chatModeButton;
     private Button tooltipButton;
     private Button tooltipShiftButton;
+    private Button outgoingButton;
+    private Button outgoingTargetButton;
     private Button ignoreEnglishButton;
-    private Button ignoreSelfButton;
+    private Button systemChatButton;
     private Button openFolderButton;
     private Button clearCacheButton;
 
@@ -45,11 +47,11 @@ public class TranslatorConfigScreen extends Screen {
         super.init();
 
         int centerX = this.width / 2;
-        int startY = 36;
+        int startY = 32;
         int btnWidth = 155;
         int btnHeight = 20;
 
-        // Row 1: Master Switch & Target Language
+        // Row 1: Master Switch & Target Language (Incoming)
         masterButton = addRenderableWidget(Button.builder(getMasterButtonText(), btn -> {
             config.toggleMaster();
             btn.setMessage(getMasterButtonText());
@@ -60,40 +62,51 @@ public class TranslatorConfigScreen extends Screen {
             btn.setMessage(getTargetLangButtonText());
         }).bounds(centerX + 5, startY, btnWidth, btnHeight).build());
 
-        // Row 2: Chat Translation & System Messages
+        // Row 2: Chat Translation & Chat Mode (BELOW / REPLACE)
         chatButton = addRenderableWidget(Button.builder(getChatButtonText(), btn -> {
             config.toggleChat();
             btn.setMessage(getChatButtonText());
-        }).bounds(centerX - 160, startY + 23, btnWidth, btnHeight).build());
+        }).bounds(centerX - 160, startY + 22, btnWidth, btnHeight).build());
 
-        systemChatButton = addRenderableWidget(Button.builder(getSystemChatButtonText(), btn -> {
-            config.toggleSystemMessages();
-            btn.setMessage(getSystemChatButtonText());
-        }).bounds(centerX + 5, startY + 23, btnWidth, btnHeight).build());
+        chatModeButton = addRenderableWidget(Button.builder(getChatModeButtonText(), btn -> {
+            config.toggleChatReplaceMode();
+            btn.setMessage(getChatModeButtonText());
+        }).bounds(centerX + 5, startY + 22, btnWidth, btnHeight).build());
 
         // Row 3: Item Tooltips & Shift Mode
         tooltipButton = addRenderableWidget(Button.builder(getTooltipButtonText(), btn -> {
             config.toggleTooltip();
             btn.setMessage(getTooltipButtonText());
-        }).bounds(centerX - 160, startY + 46, btnWidth, btnHeight).build());
+        }).bounds(centerX - 160, startY + 44, btnWidth, btnHeight).build());
 
         tooltipShiftButton = addRenderableWidget(Button.builder(getTooltipShiftButtonText(), btn -> {
             config.toggleTooltipHoldShift();
             btn.setMessage(getTooltipShiftButtonText());
-        }).bounds(centerX + 5, startY + 46, btnWidth, btnHeight).build());
+        }).bounds(centerX + 5, startY + 44, btnWidth, btnHeight).build());
 
-        // Row 4: Ignore English & Ignore Own Chat
+        // Row 4: Outgoing Translation & Outgoing Target Language
+        outgoingButton = addRenderableWidget(Button.builder(getOutgoingButtonText(), btn -> {
+            config.toggleOutgoingTranslation();
+            btn.setMessage(getOutgoingButtonText());
+        }).bounds(centerX - 160, startY + 66, btnWidth, btnHeight).build());
+
+        outgoingTargetButton = addRenderableWidget(Button.builder(getOutgoingTargetButtonText(), btn -> {
+            config.cycleOutgoingTargetLanguage();
+            btn.setMessage(getOutgoingTargetButtonText());
+        }).bounds(centerX + 5, startY + 66, btnWidth, btnHeight).build());
+
+        // Row 5: Ignore English & Broadcasts
         ignoreEnglishButton = addRenderableWidget(Button.builder(getIgnoreEnglishButtonText(), btn -> {
             config.toggleIgnoreEnglish();
             btn.setMessage(getIgnoreEnglishButtonText());
-        }).bounds(centerX - 160, startY + 69, btnWidth, btnHeight).build());
+        }).bounds(centerX - 160, startY + 88, btnWidth, btnHeight).build());
 
-        ignoreSelfButton = addRenderableWidget(Button.builder(getIgnoreSelfButtonText(), btn -> {
-            config.toggleIgnoreSelfChat();
-            btn.setMessage(getIgnoreSelfButtonText());
-        }).bounds(centerX + 5, startY + 69, btnWidth, btnHeight).build());
+        systemChatButton = addRenderableWidget(Button.builder(getSystemChatButtonText(), btn -> {
+            config.toggleSystemMessages();
+            btn.setMessage(getSystemChatButtonText());
+        }).bounds(centerX + 5, startY + 88, btnWidth, btnHeight).build());
 
-        // Row 5: Open Config Folder & Clear Cache
+        // Row 6: Open Config Folder & Clear Cache
         openFolderButton = addRenderableWidget(Button.builder(Component.literal("Open Config Folder"), btn -> {
             try {
                 Path configDir = net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get();
@@ -101,7 +114,7 @@ public class TranslatorConfigScreen extends Screen {
             } catch (Exception e) {
                 testResult = "Error opening folder: " + e.getMessage();
             }
-        }).bounds(centerX - 160, startY + 92, btnWidth, btnHeight).build());
+        }).bounds(centerX - 160, startY + 110, btnWidth, btnHeight).build());
 
         clearCacheButton = addRenderableWidget(Button.builder(Component.literal("Clear Cache"), btn -> {
             if (engine != null && engine.getCache() != null) {
@@ -109,10 +122,10 @@ public class TranslatorConfigScreen extends Screen {
                 engine.getCache().clear();
                 testResult = "Cache wiped (" + count + " items reset).";
             }
-        }).bounds(centerX + 5, startY + 92, btnWidth, btnHeight).build());
+        }).bounds(centerX + 5, startY + 110, btnWidth, btnHeight).build());
 
-        // Row 6: Live Translation Test Section
-        int testHeaderY = startY + 118;
+        // Row 7: Live Translation Test Section
+        int testHeaderY = startY + 134;
         int testInputY = testHeaderY + 13;
 
         testInputBox = new EditBox(this.font, centerX - 160, testInputY, 235, 20, Component.literal("Test Input"));
@@ -141,7 +154,7 @@ public class TranslatorConfigScreen extends Screen {
             if (this.minecraft != null) {
                 this.minecraft.setScreen(this.parentScreen);
             }
-        }).bounds(centerX - 75, this.height - 26, 150, 20).build());
+        }).bounds(centerX - 75, this.height - 24, 150, 20).build());
     }
 
     private Component getMasterButtonText() {
@@ -150,11 +163,24 @@ public class TranslatorConfigScreen extends Screen {
 
     private Component getTargetLangButtonText() {
         SupportedLanguage lang = config.getSupportedLanguage();
-        return Component.literal("Target: §b" + lang.getEnglishName() + " §7(" + lang.getCode().toUpperCase() + ")");
+        return Component.literal("In Target: §b" + lang.getEnglishName() + " §7(" + lang.getCode().toUpperCase() + ")");
     }
 
     private Component getChatButtonText() {
         return Component.literal("Chat: " + (config.chatTranslationEnabled ? "§aON" : "§cOFF"));
+    }
+
+    private Component getChatModeButtonText() {
+        return Component.literal("Chat Mode: " + (config.chatReplaceMode ? "§eREPLACE" : "§aBELOW"));
+    }
+
+    private Component getOutgoingButtonText() {
+        return Component.literal("Translate Sent: " + (config.outgoingTranslationEnabled ? "§aON" : "§cOFF"));
+    }
+
+    private Component getOutgoingTargetButtonText() {
+        SupportedLanguage lang = config.getOutgoingSupportedLanguage();
+        return Component.literal("Send Target: §b" + lang.getEnglishName() + " §7(" + lang.getCode().toUpperCase() + ")");
     }
 
     private Component getSystemChatButtonText() {
@@ -188,7 +214,7 @@ public class TranslatorConfigScreen extends Screen {
         graphics.drawCenteredString(this.font, Component.literal("§8Real-time Multilingual Chat & Item Tooltip Translation"), centerX, 22, 0x888888);
 
         // Test Section Title
-        int testHeaderY = 154;
+        int testHeaderY = 166;
         graphics.drawString(this.font, Component.literal("§eLive Translation Tester (Supports 100+ languages):"), centerX - 160, testHeaderY, 0xAAAAAA);
 
         // Result Line (Placed safely below the input box)
@@ -196,7 +222,7 @@ public class TranslatorConfigScreen extends Screen {
         graphics.drawString(this.font, Component.literal("§7Result: §a" + testResult), centerX - 160, resultY, 0xFFFFFF);
 
         // Hint at bottom
-        graphics.drawCenteredString(this.font, Component.literal("§8Tip: Press 'V' in-game to open this menu anytime"), centerX, this.height - 38, 0x666666);
+        graphics.drawCenteredString(this.font, Component.literal("§8Tip: Press 'V' to configure | Type '!' or '//' in chat to bypass outgoing translation"), centerX, this.height - 36, 0x666666);
     }
 
     @Override

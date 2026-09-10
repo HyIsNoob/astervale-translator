@@ -22,12 +22,17 @@ public class TranslatorConfig {
 
     // Translation Features
     public boolean chatTranslationEnabled = true;
+    public boolean chatReplaceMode = false; // If true, replaces original chat message; if false, adds translation below
     public boolean tooltipTranslationEnabled = true;
     public boolean tooltipHoldShift = false; // If true, only show translated tooltips when holding SHIFT
     public boolean translateSystemMessages = true; // Translate system & server announcements
     public boolean ignoreSelfChat = true; // Don't translate own chat messages
     public boolean translateItemName = true;
     public boolean translateItemLore = true;
+
+    // Outgoing Reverse Translation (translates what YOU type and send)
+    public boolean outgoingTranslationEnabled = false;
+    public String outgoingTargetLanguage = "ko"; // Default to Korean (e.g. for Aster Vale) or any target
 
     // Language Target: "vi", "en", "ja", "ko", etc.
     public String targetLanguage = "vi";
@@ -81,10 +86,13 @@ public class TranslatorConfig {
             if (loaded != null) {
                 this.masterEnabled = loaded.masterEnabled;
                 this.chatTranslationEnabled = loaded.chatTranslationEnabled;
+                this.chatReplaceMode = loaded.chatReplaceMode;
                 this.tooltipTranslationEnabled = loaded.tooltipTranslationEnabled;
                 this.tooltipHoldShift = loaded.tooltipHoldShift;
                 this.translateSystemMessages = loaded.translateSystemMessages;
                 this.ignoreSelfChat = loaded.ignoreSelfChat;
+                this.outgoingTranslationEnabled = loaded.outgoingTranslationEnabled;
+                this.outgoingTargetLanguage = loaded.outgoingTargetLanguage != null ? loaded.outgoingTargetLanguage : this.outgoingTargetLanguage;
                 this.translateItemName = loaded.translateItemName;
                 this.translateItemLore = loaded.translateItemLore;
                 this.targetLanguage = loaded.targetLanguage != null ? loaded.targetLanguage : this.targetLanguage;
@@ -118,6 +126,26 @@ public class TranslatorConfig {
 
     public void toggleChat() {
         this.chatTranslationEnabled = !this.chatTranslationEnabled;
+        save();
+    }
+
+    public void toggleChatReplaceMode() {
+        this.chatReplaceMode = !this.chatReplaceMode;
+        save();
+    }
+
+    public void toggleOutgoingTranslation() {
+        this.outgoingTranslationEnabled = !this.outgoingTranslationEnabled;
+        save();
+    }
+
+    public SupportedLanguage getOutgoingSupportedLanguage() {
+        return SupportedLanguage.fromCode(this.outgoingTargetLanguage);
+    }
+
+    public void cycleOutgoingTargetLanguage() {
+        SupportedLanguage next = getOutgoingSupportedLanguage().next();
+        this.outgoingTargetLanguage = next.getCode();
         save();
     }
 
