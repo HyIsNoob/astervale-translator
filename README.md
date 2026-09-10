@@ -8,11 +8,19 @@ A lightweight, 100% client-side Minecraft mod for NeoForge 1.21.4. Seamlessly tr
 ## Features
 
 - Real-Time Chat Translation:
-  - Automatically intercepts player messages and server announcements in foreign languages (Korean, Japanese, Chinese, Russian, etc.).
-  - Translates asynchronously in the background and displays the translated text directly below the original message.
+  - Automatically intercepts player messages and server announcements in foreign languages (Korean, Japanese, Chinese, Russian, Vietnamese, etc.).
+  - Translates asynchronously in the background and displays the translated text cleanly below the original message.
+  - Automatically filters out your own chat messages to prevent duplicate spam.
+  - Optional toggle for server broadcast announcements.
 - Item Tooltip & Lore Translation:
   - Translates custom item names, weapon stats, armor descriptions, and RPG lore on hover.
-  - No manual keybinds required.
+  - Two modes: Always show translation OR hold Shift to reveal translation.
+- 17 Global Target Languages:
+  - English, Vietnamese, Japanese, Korean, Simplified Chinese, Traditional Chinese, Spanish, Portuguese, French, German, Russian, Indonesian, Thai, Tagalog, Turkish, Arabic, Italian.
+- In-Game GUI Menu (Press 'V'):
+  - Intuitive graphical config screen accessible anytime with keybind `V` or `/translator`.
+  - Built-in Live Translation Tester to test any text in real-time.
+  - One-click buttons to Clear Cache and Open Config Folder directly in your file explorer.
 - Two-Tier Caching System (0ms Latency):
   - L1 RAM Cache: Instant in-memory lookup.
   - L2 Disk Cache: Persists all translated phrases to disk (`.minecraft/config/universal_translator_cache.json`). Re-hovering an item takes 0ms.
@@ -24,11 +32,18 @@ A lightweight, 100% client-side Minecraft mod for NeoForge 1.21.4. Seamlessly tr
 
 ---
 
+## Controls & Commands
+
+- Press `V`: Open Universal Auto Translator Config GUI in-game.
+- `/translator`: Open config menu via chat command.
+- `/translate <text>`: Instantly test translation in chat.
+
+---
+
 ## Installation
 
-1. Download the latest `.jar` file (`universal_translator-1.21.4-1.0.0.jar`) from GitHub Releases or GitHub Actions Artifacts.
-2. Place the `.jar` file into your `.minecraft/mods/` folder.
-3. Launch Minecraft with NeoForge 1.21.4 and enjoy.
+1. Copy `universal_translator-1.21.4-1.0.0.jar` into your `.minecraft/mods/` folder.
+2. Launch Minecraft with NeoForge 1.21.4 and enjoy.
 
 ---
 
@@ -39,26 +54,19 @@ Configuration file location:
 
 ```json
 {
-  "targetLanguage": "vi",
-  "sourceLanguage": "auto",
+  "masterEnabled": true,
   "chatTranslationEnabled": true,
   "tooltipTranslationEnabled": true,
-  "translateItemName": true,
-  "translateItemLore": true,
+  "tooltipHoldShift": false,
+  "translateSystemMessages": true,
+  "ignoreSelfChat": true,
+  "targetLanguage": "vi",
+  "sourceLanguage": "auto",
+  "ignoreEnglish": true,
   "chatPrefix": "  §b[VI] §f",
-  "tooltipPrefix": "§b[VI] §7",
-  "translateAllForeignText": true
+  "tooltipPrefix": "§b[VI] §7"
 }
 ```
-
-### Configuration Options
-
-- `targetLanguage`: The language code to translate into (e.g. `vi` for Vietnamese, `en` for English, `es` for Spanish, `ru` for Russian).
-- `sourceLanguage`: Source language code or `auto` for automatic detection.
-- `chatTranslationEnabled`: Enable or disable automatic chat translation.
-- `tooltipTranslationEnabled`: Enable or disable item tooltip/lore translation.
-- `chatPrefix`: Custom chat prefix and color codes for translated messages.
-- `tooltipPrefix`: Custom tooltip prefix and color codes for translated lore lines.
 
 ---
 
@@ -66,7 +74,7 @@ Configuration file location:
 
 - Platform: NeoForge 1.21.4
 - Java Version: Java 21
-- Translation Backend: Google Translate Web API with MyMemory fallback
+- Translation Backend: Google Mobile Web Engine with GTX, MyMemory, and Custom Lexicon fallbacks
 - Threading: Non-blocking Worker Thread Pool (Daemon)
 - Network Impact: Zero bandwidth overhead on cached items
 
