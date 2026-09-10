@@ -1,60 +1,77 @@
-# 🌐 Aster Vale Auto Translator (NeoForge 1.21.4)
-**Mod Dịch Tự Động Tiếng Hàn Sang Tiếng Việt Cho Khung Chat & Item Tooltips**
+# Universal Auto Translator (NeoForge 1.21.4)
+Client-Side Real-Time Chat & Item Tooltip Translator using Google Translate
 
-Một bản mod **100% Client-Side** được thiết kế riêng cho người chơi máy chủ Minecraft **Aster Vale** (`1.224.237.11:25565`) trên nền tảng **NeoForge 1.21.4 (Java 21)**.
-
----
-
-## ⚡ Các Tính Năng Nổi Bật
-
-1. **Tự Động Dịch Khung Chat Thời Gian Thực:**
-   * Tự động nhận diện mọi tin nhắn của người chơi và thông báo hệ thống chứa ký tự tiếng Hàn (`[\uac00-\ud7a3]`).
-   * Dịch ngầm qua luồng bất đồng bộ (Async Thread) và hiển thị dòng dịch tiếng Việt màu xanh lơ `[VI]` nổi bật ngay bên dưới tin nhắn gốc.
-   * Không làm giảm FPS, không bị khựng game.
-
-2. **Tự Động Dịch Item Tooltips & Lore (Trang Bị, Vũ Khí, Sách Kỹ Năng):**
-   * Quét và dịch toàn bộ tên và các dòng mô tả (Lore) của vật phẩm tiếng Hàn khi rê chuột trong kho đồ hoặc chợ.
-   * Cơ chế **L1 RAM Cache** + **L2 File Cache JSON**: Lần rê chuột thứ 2 trở đi tốc độ là **0ms tức thì**!
-
-3. **Từ Điển Thuật Ngữ Aster Vale Tích Hợp Sẵn:**
-   * Đã được huấn luyện sẵn với các thuật ngữ riêng của server Aster Vale:
-     * **Chứng khoán & Kinh tế:** `상장폐지` (Hủy niêm yết), `주식` (Chứng khoán), `매수` (Mua vào), `매도` (Bán ra), `평단가` (Giá vốn trung bình), `수익률` (Tỷ suất sinh lời)...
-     * **Khoáng sản & Đá quý:** `오팔` (Ngọc Opal), `사파이어` (Ngọc Sapphire), `루비` (Ngọc Ruby), `월장석` (Đá Mặt Trăng), `블랙 다이아몬드` (Kim Cương Đen)...
-     * **Nghề nghiệp & Đời sống:** `생활 일지` (Nhật ký Đời Sống), `대장장이` (Thợ Rèn), `광부` (Thợ Mỏ), `요리` (Nấu Ăn)...
-     * **Trang bị & Kỹ năng:** `어린 수룡 갑옷` (Giáp Thủy Long Con), `별들의 축복` (Phước Lành Các Vì Sao)...
-
-4. **Tàng Hình 100% (Client-Side Stealth):**
-   * Mod được cấu hình cờ `displayTest = "IGNORE_ALL_VERSION"` và `clientSideOnly = true`.
-   * Server Aster Vale không yêu cầu cài đặt mod này, không thực hiện packet handshake, **hoàn toàn vô hình trước anti-cheat**.
+A lightweight, 100% client-side Minecraft mod for NeoForge 1.21.4. Seamlessly translates in-game player chat, system notifications, and item tooltips (names and lore) into your native language in real-time with zero FPS drop.
 
 ---
 
-## 📥 Hướng Dẫn Cài Đặt
+## Features
 
-1. Tải file mod dạng `.jar` (ví dụ: `astervale-translator-1.21.4-1.0.0.jar`) từ mục **Releases** hoặc **Actions Artifacts**.
-2. Mở thư mục chứa game của launcher:
-   * Nhấn phím `Windows + R` $\rightarrow$ gõ `%appdata%` $\rightarrow$ tìm thư mục launcher của bạn (hoặc `.minecraft`).
-   * Mở thư mục `mods/`.
-3. Bỏ file `astervale-translator-1.21.4-1.0.0.jar` vào thư mục `mods/`.
-4. Khởi động game và vào server Aster Vale để trải nghiệm!
+- Real-Time Chat Translation:
+  - Automatically intercepts player messages and server announcements in foreign languages (Korean, Japanese, Chinese, Russian, etc.).
+  - Translates asynchronously in the background and displays the translated text directly below the original message.
+- Item Tooltip & Lore Translation:
+  - Translates custom item names, weapon stats, armor descriptions, and RPG lore on hover.
+  - No manual keybinds required.
+- Two-Tier Caching System (0ms Latency):
+  - L1 RAM Cache: Instant in-memory lookup.
+  - L2 Disk Cache: Persists all translated phrases to disk (`.minecraft/config/universal_translator_cache.json`). Re-hovering an item takes 0ms.
+- Customizable Game Lexicon:
+  - Includes a customizable dictionary file (`.minecraft/config/universal_translator_lexicon.json`) for server-specific jargon, economy terms, and gem names.
+- 100% Client-Side Stealth:
+  - Configured with `displayTest = "IGNORE_ALL_VERSION"` and `clientSideOnly = true`.
+  - Works on any server without server-side mod installation or handshake requirements. Completely safe and undetectable.
 
 ---
 
-## ⚙️ Cấu Hình Tùy Chỉnh
+## Installation
 
-File cấu hình được tự động tạo tại:  
-`.minecraft/config/astervale_translator.json`
+1. Download the latest `.jar` file (`universal_translator-1.21.4-1.0.0.jar`) from GitHub Releases or GitHub Actions Artifacts.
+2. Place the `.jar` file into your `.minecraft/mods/` folder.
+3. Launch Minecraft with NeoForge 1.21.4 and enjoy.
+
+---
+
+## Configuration
+
+Configuration file location:  
+`.minecraft/config/universal_translator.json`
 
 ```json
 {
+  "targetLanguage": "vi",
+  "sourceLanguage": "auto",
   "chatTranslationEnabled": true,
   "tooltipTranslationEnabled": true,
+  "translateItemName": true,
+  "translateItemLore": true,
   "chatPrefix": "  §b[VI] §f",
   "tooltipPrefix": "§b[VI] §7",
-  "translateItemName": true,
-  "translateItemLore": true
+  "translateAllForeignText": true
 }
 ```
 
-Bộ nhớ đệm bản dịch được lưu tại:  
-`.minecraft/config/astervale_translator_cache.json` (bạn có thể xem hoặc chỉnh sửa trực tiếp các từ dịch theo ý muốn).
+### Configuration Options
+
+- `targetLanguage`: The language code to translate into (e.g. `vi` for Vietnamese, `en` for English, `es` for Spanish, `ru` for Russian).
+- `sourceLanguage`: Source language code or `auto` for automatic detection.
+- `chatTranslationEnabled`: Enable or disable automatic chat translation.
+- `tooltipTranslationEnabled`: Enable or disable item tooltip/lore translation.
+- `chatPrefix`: Custom chat prefix and color codes for translated messages.
+- `tooltipPrefix`: Custom tooltip prefix and color codes for translated lore lines.
+
+---
+
+## Technical Specifications
+
+- Platform: NeoForge 1.21.4
+- Java Version: Java 21
+- Translation Backend: Google Translate Web API with MyMemory fallback
+- Threading: Non-blocking Worker Thread Pool (Daemon)
+- Network Impact: Zero bandwidth overhead on cached items
+
+---
+
+## License
+
+MIT License. Free for use in any modpack.

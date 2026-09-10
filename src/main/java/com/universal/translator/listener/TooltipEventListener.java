@@ -1,7 +1,7 @@
-package com.astervale.translator.listener;
+package com.universal.translator.listener;
 
-import com.astervale.translator.config.TranslatorConfig;
-import com.astervale.translator.engine.TranslationEngine;
+import com.universal.translator.config.TranslatorConfig;
+import com.universal.translator.engine.TranslationEngine;
 import net.minecraft.network.chat.Component;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.player.ItemTooltipEvent;
@@ -33,24 +33,24 @@ public class TooltipEventListener {
             newTooltip.add(originalComponent);
 
             String rawText = originalComponent.getString();
-            if (rawText.isBlank() || rawText.contains("[VI]")) continue;
+            if (rawText.isBlank() || rawText.contains("[VI]") || rawText.contains("[TRANS]")) continue;
 
-            // Check if this line has Korean Hangul
-            if (engine.containsKorean(rawText)) {
+            // Check if this line contains foreign characters needing translation
+            if (engine.needsTranslation(rawText)) {
                 String cachedTranslation = engine.getCache().get(rawText.trim());
 
                 if (cachedTranslation != null && !cachedTranslation.isBlank()) {
-                    // Check if the next line is already our translation
                     boolean alreadyInserted = false;
                     if (i + 1 < tooltip.size()) {
                         String nextLine = tooltip.get(i + 1).getString();
-                        if (nextLine.contains("[VI]")) {
+                        if (nextLine.contains("[VI]") || nextLine.contains("[TRANS]")) {
                             alreadyInserted = true;
                         }
                     }
 
                     if (!alreadyInserted) {
-                        Component translatedComponent = Component.literal(config.tooltipPrefix + cachedTranslation);
+                        String prefix = config.tooltipPrefix != null ? config.tooltipPrefix : "§b[VI] §7";
+                        Component translatedComponent = Component.literal(prefix + cachedTranslation);
                         newTooltip.add(translatedComponent);
                     }
                 } else {
@@ -62,7 +62,6 @@ public class TooltipEventListener {
             }
         }
 
-        // Replace the tooltip lines with our enhanced list
         tooltip.clear();
         tooltip.addAll(newTooltip);
     }

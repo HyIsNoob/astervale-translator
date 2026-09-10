@@ -1,4 +1,4 @@
-name: Build Aster Vale Translator Mod
+name: Build Universal Auto Translator Mod
 
 on:
   push:
@@ -28,6 +28,6 @@ jobs:
       - name: Upload Mod Artifact (.jar)
         uses: actions/upload-artifact@v4
         with:
-          name: astervale-translator-1.21.4
-          path: build/libs/*-1.0.0.jar
+          name: universal-translator-1.21.4
+          path: build/libs/*.jar
           if-no-files-found: warn

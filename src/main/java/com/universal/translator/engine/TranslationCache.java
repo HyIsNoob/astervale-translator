@@ -1,4 +1,4 @@
-package com.astervale.translator.engine;
+package com.universal.translator.engine;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Two-tier cache: L1 Memory (ConcurrentHashMap) for 0ms lookups,
- * and L2 Disk (.minecraft/config/astervale_translator_cache.json) for persistence.
+ * and L2 Disk (.minecraft/config/universal_translator_cache.json) for persistence.
  */
 public class TranslationCache {
 
@@ -35,7 +35,7 @@ public class TranslationCache {
             if (!Files.exists(configDirectory)) {
                 Files.createDirectories(configDirectory);
             }
-            this.cacheFilePath = configDirectory.resolve("astervale_translator_cache.json");
+            this.cacheFilePath = configDirectory.resolve("universal_translator_cache.json");
             load();
         } catch (Exception e) {
             LOGGER.error("Failed to initialize translation cache file: {}", e.getMessage());

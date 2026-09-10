@@ -9,4 +9,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = 'astervale-translator'
+rootProject.name = 'universal-translator'
