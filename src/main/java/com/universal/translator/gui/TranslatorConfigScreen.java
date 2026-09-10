@@ -7,6 +7,7 @@ import com.universal.translator.engine.TranslationEngine;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -55,56 +56,94 @@ public class TranslatorConfigScreen extends Screen {
         masterButton = addRenderableWidget(Button.builder(getMasterButtonText(), btn -> {
             config.toggleMaster();
             btn.setMessage(getMasterButtonText());
-        }).bounds(centerX - 160, startY, btnWidth, btnHeight).build());
+        }).bounds(centerX - 160, startY, btnWidth, btnHeight)
+          .tooltip(Tooltip.create(Component.literal("Master switch to enable or disable all translation features.")))
+          .build());
 
         targetLangButton = addRenderableWidget(Button.builder(getTargetLangButtonText(), btn -> {
-            config.cycleTargetLanguage();
-            btn.setMessage(getTargetLangButtonText());
-        }).bounds(centerX + 5, startY, btnWidth, btnHeight).build());
+            if (this.minecraft != null) {
+                this.minecraft.setScreen(new LanguageSelectionScreen(
+                    this,
+                    Component.literal("Select Incoming Target Language"),
+                    config.getSupportedLanguage(),
+                    selected -> {
+                        config.setTargetLanguage(selected.getCode());
+                        targetLangButton.setMessage(getTargetLangButtonText());
+                    }
+                ));
+            }
+        }).bounds(centerX + 5, startY, btnWidth, btnHeight)
+          .tooltip(Tooltip.create(Component.literal("Target language for incoming foreign chat & item lore.\nClick to open scrollable list.")))
+          .build());
 
         // Row 2: Chat Translation & Chat Mode (BELOW / REPLACE)
         chatButton = addRenderableWidget(Button.builder(getChatButtonText(), btn -> {
             config.toggleChat();
             btn.setMessage(getChatButtonText());
-        }).bounds(centerX - 160, startY + 22, btnWidth, btnHeight).build());
+        }).bounds(centerX - 160, startY + 22, btnWidth, btnHeight)
+          .tooltip(Tooltip.create(Component.literal("Automatically translate foreign chat messages from other players in real time.")))
+          .build());
 
         chatModeButton = addRenderableWidget(Button.builder(getChatModeButtonText(), btn -> {
             config.toggleChatReplaceMode();
             btn.setMessage(getChatModeButtonText());
-        }).bounds(centerX + 5, startY + 22, btnWidth, btnHeight).build());
+        }).bounds(centerX + 5, startY + 22, btnWidth, btnHeight)
+          .tooltip(Tooltip.create(Component.literal("BELOW: Shows translation line under original message.\nREPLACE: Cleanly replaces original message with translation.")))
+          .build());
 
         // Row 3: Item Tooltips & Shift Mode
         tooltipButton = addRenderableWidget(Button.builder(getTooltipButtonText(), btn -> {
             config.toggleTooltip();
             btn.setMessage(getTooltipButtonText());
-        }).bounds(centerX - 160, startY + 44, btnWidth, btnHeight).build());
+        }).bounds(centerX - 160, startY + 44, btnWidth, btnHeight)
+          .tooltip(Tooltip.create(Component.literal("Translate custom item names and RPG lore lines when hovering over items in inventories.")))
+          .build());
 
         tooltipShiftButton = addRenderableWidget(Button.builder(getTooltipShiftButtonText(), btn -> {
             config.toggleTooltipHoldShift();
             btn.setMessage(getTooltipShiftButtonText());
-        }).bounds(centerX + 5, startY + 44, btnWidth, btnHeight).build());
+        }).bounds(centerX + 5, startY + 44, btnWidth, btnHeight)
+          .tooltip(Tooltip.create(Component.literal("ALWAYS: Item lore is always translated.\nHOLD SHIFT: Translation is only shown while holding the Shift key.")))
+          .build());
 
         // Row 4: Outgoing Translation & Outgoing Target Language
         outgoingButton = addRenderableWidget(Button.builder(getOutgoingButtonText(), btn -> {
             config.toggleOutgoingTranslation();
             btn.setMessage(getOutgoingButtonText());
-        }).bounds(centerX - 160, startY + 66, btnWidth, btnHeight).build());
+        }).bounds(centerX - 160, startY + 66, btnWidth, btnHeight)
+          .tooltip(Tooltip.create(Component.literal("Automatically translate what YOU type into foreign language before sending.\nPrefix with '!' or '//' to bypass.")))
+          .build());
 
         outgoingTargetButton = addRenderableWidget(Button.builder(getOutgoingTargetButtonText(), btn -> {
-            config.cycleOutgoingTargetLanguage();
-            btn.setMessage(getOutgoingTargetButtonText());
-        }).bounds(centerX + 5, startY + 66, btnWidth, btnHeight).build());
+            if (this.minecraft != null) {
+                this.minecraft.setScreen(new LanguageSelectionScreen(
+                    this,
+                    Component.literal("Select Outgoing Target Language"),
+                    config.getOutgoingSupportedLanguage(),
+                    selected -> {
+                        config.setOutgoingTargetLanguage(selected.getCode());
+                        outgoingTargetButton.setMessage(getOutgoingTargetButtonText());
+                    }
+                ));
+            }
+        }).bounds(centerX + 5, startY + 66, btnWidth, btnHeight)
+          .tooltip(Tooltip.create(Component.literal("Target language for your outgoing chat messages.\nClick to open scrollable list.")))
+          .build());
 
         // Row 5: Ignore English & Broadcasts
         ignoreEnglishButton = addRenderableWidget(Button.builder(getIgnoreEnglishButtonText(), btn -> {
             config.toggleIgnoreEnglish();
             btn.setMessage(getIgnoreEnglishButtonText());
-        }).bounds(centerX - 160, startY + 88, btnWidth, btnHeight).build());
+        }).bounds(centerX - 160, startY + 88, btnWidth, btnHeight)
+          .tooltip(Tooltip.create(Component.literal("Skip translating messages already written in English or Latin alphabet (recommended for global servers).")))
+          .build());
 
         systemChatButton = addRenderableWidget(Button.builder(getSystemChatButtonText(), btn -> {
             config.toggleSystemMessages();
             btn.setMessage(getSystemChatButtonText());
-        }).bounds(centerX + 5, startY + 88, btnWidth, btnHeight).build());
+        }).bounds(centerX + 5, startY + 88, btnWidth, btnHeight)
+          .tooltip(Tooltip.create(Component.literal("Translate system notices, server broadcasts, and action bar text.")))
+          .build());
 
         // Row 6: Open Config Folder & Clear Cache
         openFolderButton = addRenderableWidget(Button.builder(Component.literal("Open Config Folder"), btn -> {
@@ -114,7 +153,9 @@ public class TranslatorConfigScreen extends Screen {
             } catch (Exception e) {
                 testResult = "Error opening folder: " + e.getMessage();
             }
-        }).bounds(centerX - 160, startY + 110, btnWidth, btnHeight).build());
+        }).bounds(centerX - 160, startY + 110, btnWidth, btnHeight)
+          .tooltip(Tooltip.create(Component.literal("Open the Minecraft config directory to view or edit custom lexicon files.")))
+          .build());
 
         clearCacheButton = addRenderableWidget(Button.builder(Component.literal("Clear Cache"), btn -> {
             if (engine != null && engine.getCache() != null) {
@@ -122,7 +163,9 @@ public class TranslatorConfigScreen extends Screen {
                 engine.getCache().clear();
                 testResult = "Cache wiped (" + count + " items reset).";
             }
-        }).bounds(centerX + 5, startY + 110, btnWidth, btnHeight).build());
+        }).bounds(centerX + 5, startY + 110, btnWidth, btnHeight)
+          .tooltip(Tooltip.create(Component.literal("Wipe both memory and disk translation cache files to reset all stored translations.")))
+          .build());
 
         // Row 7: Live Translation Test Section
         int testHeaderY = startY + 134;
@@ -146,7 +189,9 @@ public class TranslatorConfigScreen extends Screen {
                     });
                 }
             });
-        }).bounds(centerX + 80, testInputY, 80, 20).build());
+        }).bounds(centerX + 80, testInputY, 80, 20)
+          .tooltip(Tooltip.create(Component.literal("Send the text to Google Translate engine to test translation immediately.")))
+          .build());
 
         // Done Button
         addRenderableWidget(Button.builder(Component.literal("Done"), btn -> {
@@ -154,7 +199,9 @@ public class TranslatorConfigScreen extends Screen {
             if (this.minecraft != null) {
                 this.minecraft.setScreen(this.parentScreen);
             }
-        }).bounds(centerX - 75, this.height - 24, 150, 20).build());
+        }).bounds(centerX - 75, this.height - 24, 150, 20)
+          .tooltip(Tooltip.create(Component.literal("Save all configuration settings and return to previous menu.")))
+          .build());
     }
 
     private Component getMasterButtonText() {
@@ -163,7 +210,7 @@ public class TranslatorConfigScreen extends Screen {
 
     private Component getTargetLangButtonText() {
         SupportedLanguage lang = config.getSupportedLanguage();
-        return Component.literal("In Target: §b" + lang.getEnglishName() + " §7(" + lang.getCode().toUpperCase() + ")");
+        return Component.literal("In Target: §b" + lang.getEnglishName() + " §7(" + lang.getCode().toUpperCase() + ") ▾");
     }
 
     private Component getChatButtonText() {
@@ -180,7 +227,7 @@ public class TranslatorConfigScreen extends Screen {
 
     private Component getOutgoingTargetButtonText() {
         SupportedLanguage lang = config.getOutgoingSupportedLanguage();
-        return Component.literal("Send Target: §b" + lang.getEnglishName() + " §7(" + lang.getCode().toUpperCase() + ")");
+        return Component.literal("Send Target: §b" + lang.getEnglishName() + " §7(" + lang.getCode().toUpperCase() + ") ▾");
     }
 
     private Component getSystemChatButtonText() {
@@ -197,10 +244,6 @@ public class TranslatorConfigScreen extends Screen {
 
     private Component getIgnoreEnglishButtonText() {
         return Component.literal("Ignore English: " + (config.ignoreEnglish ? "§aON" : "§cOFF"));
-    }
-
-    private Component getIgnoreSelfButtonText() {
-        return Component.literal("Ignore Own Chat: " + (config.ignoreSelfChat ? "§aON" : "§cOFF"));
     }
 
     @Override

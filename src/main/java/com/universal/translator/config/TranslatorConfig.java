@@ -143,10 +143,15 @@ public class TranslatorConfig {
         return SupportedLanguage.fromCode(this.outgoingTargetLanguage);
     }
 
+    public void setOutgoingTargetLanguage(String code) {
+        SupportedLanguage lang = SupportedLanguage.fromCode(code);
+        this.outgoingTargetLanguage = lang.getCode();
+        save();
+    }
+
     public void cycleOutgoingTargetLanguage() {
         SupportedLanguage next = getOutgoingSupportedLanguage().next();
-        this.outgoingTargetLanguage = next.getCode();
-        save();
+        setOutgoingTargetLanguage(next.getCode());
     }
 
     public void toggleTooltip() {
@@ -178,12 +183,17 @@ public class TranslatorConfig {
         return SupportedLanguage.fromCode(this.targetLanguage);
     }
 
+    public void setTargetLanguage(String code) {
+        SupportedLanguage lang = SupportedLanguage.fromCode(code);
+        this.targetLanguage = lang.getCode();
+        this.chatPrefix = "  §b[" + lang.getCode().toUpperCase() + "] §f";
+        this.tooltipPrefix = "§b[" + lang.getCode().toUpperCase() + "] §7";
+        save();
+    }
+
     public void cycleTargetLanguage() {
         SupportedLanguage next = getSupportedLanguage().next();
-        this.targetLanguage = next.getCode();
-        this.chatPrefix = "  §b[" + next.getCode().toUpperCase() + "] §f";
-        this.tooltipPrefix = "§b[" + next.getCode().toUpperCase() + "] §7";
-        save();
+        setTargetLanguage(next.getCode());
     }
 
     public Path getConfigFile() {
