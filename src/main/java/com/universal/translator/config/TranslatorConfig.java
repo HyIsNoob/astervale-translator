@@ -48,6 +48,12 @@ public class TranslatorConfig {
 
     public boolean translateAllForeignText = true;
 
+    // AI Engine Configuration
+    public String engineMode = "GOOGLE_WEB"; // "GOOGLE_WEB" or "GEMINI_API"
+    public String geminiApiKey = "";
+    public String geminiModel = "gemini-1.5-flash";
+    public boolean showFallbackNotice = true;
+
     private transient Path configFile;
 
     public void init(Path configDirectory) {
@@ -104,10 +110,28 @@ public class TranslatorConfig {
                 this.chatPrefix = loaded.chatPrefix != null ? loaded.chatPrefix : this.chatPrefix;
                 this.tooltipPrefix = loaded.tooltipPrefix != null ? loaded.tooltipPrefix : this.tooltipPrefix;
                 this.translateAllForeignText = loaded.translateAllForeignText;
+                this.engineMode = loaded.engineMode != null ? loaded.engineMode : this.engineMode;
+                this.geminiApiKey = loaded.geminiApiKey != null ? loaded.geminiApiKey : this.geminiApiKey;
+                this.geminiModel = loaded.geminiModel != null ? loaded.geminiModel : this.geminiModel;
+                this.showFallbackNotice = loaded.showFallbackNotice;
             }
         } catch (Exception e) {
             LOGGER.warn("Failed to load config: {}", e.getMessage());
         }
+    }
+
+    public void toggleEngineMode() {
+        this.engineMode = isGeminiMode() ? "GOOGLE_WEB" : "GEMINI_API";
+        save();
+    }
+
+    public boolean isGeminiMode() {
+        return "GEMINI_API".equalsIgnoreCase(this.engineMode);
+    }
+
+    public void setGeminiApiKey(String key) {
+        this.geminiApiKey = key != null ? key.trim() : "";
+        save();
     }
 
     public void save() {

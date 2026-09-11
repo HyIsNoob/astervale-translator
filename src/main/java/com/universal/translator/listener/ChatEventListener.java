@@ -120,12 +120,13 @@ public class ChatEventListener {
 
         // Not in cache: suppress the raw foreign action bar to prevent flashing, translate asynchronously
         event.setCanceled(true);
-        engine.translateAsync(rawText.trim(), translated -> {
+        engine.translateAsyncDetailed(rawText.trim(), (translated, isFallback) -> {
             Minecraft client = Minecraft.getInstance();
             if (client == null || client.gui == null) return;
             client.execute(() -> {
                 if (translated != null && !translated.isBlank()) {
-                    client.gui.setOverlayMessage(Component.literal(dominantColor + translated), false);
+                    String fbTag = isFallback ? "§6[FB] " : "";
+                    client.gui.setOverlayMessage(Component.literal(fbTag + dominantColor + translated), false);
                 } else {
                     client.gui.setOverlayMessage(message, false);
                 }
@@ -189,14 +190,18 @@ public class ChatEventListener {
     /**
      * Builds interactive translated component with hover-to-view-original and click-to-copy.
      */
-    private Component buildInteractiveComponent(String prefix, String langTag, String dominantColor, String translatedText, String originalText, boolean isMention) {
-        String fullText = (isMention ? "§6§l🔔 §r" : "") + prefix + langTag + dominantColor + translatedText;
+    private Component buildInteractiveComponent(String prefix, String langTag, String dominantColor, String translatedText, String originalText, boolean isMention, boolean isFallback) {
+        String tag = isFallback ? "§6[" + config.targetLanguage.toUpperCase() + "•FB] " : langTag;
+        String fullText = (isMention ? "§6§l🔔 §r" : "") + prefix + tag + dominantColor + translatedText;
         MutableComponent comp = Component.literal(fullText);
 
         if (originalText != null && !originalText.isBlank()) {
+            String hoverHeader = isFallback
+                    ? "§6§l[Google Translate Fallback]§r\n§e(Gemini API bận, hết Quota hoặc lỗi kết nối)\n\n§e§l[Bản Gốc / Original Text]§r\n§f"
+                    : "§e§l[Bản Gốc / Original Text]§r\n§f";
             Style interactiveStyle = comp.getStyle()
                     .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT,
-                            Component.literal("§e§l[Bản Gốc / Original Text]§r\n§f" + originalText + "\n\n§a§o» Nhấp chuột để sao chép (Click to copy)")))
+                            Component.literal(hoverHeader + originalText + "\n\n§a§o» Nhấp chuột để sao chép (Click to copy)")))
                     .withClickEvent(new ClickEvent(ClickEvent.Action.COPY_TO_CLIPBOARD, originalText));
             comp.setStyle(interactiveStyle);
         }
@@ -272,7 +277,7 @@ public class ChatEventListener {
         String cached = engine.getCache().get(contentToTranslate);
         if (cached != null && !cached.isBlank()) {
             if (config.chatReplaceMode) {
-                Component translatedComp = buildInteractiveComponent(finalSender, langTag, dominantColor, cached, contentToTranslate, finalMention);
+                Component translatedComp = buildInteractiveComponent(finalSender, langTag, dominantColor, cached, contentToTranslate, finalMention, false);
                 event.setMessage(translatedComp);
             } else {
                 if (client != null && client.gui != null && client.gui.getChat() != null) {
@@ -288,12 +293,12 @@ public class ChatEventListener {
             // Suppress the original raw message
             event.setCanceled(true);
 
-            engine.translateAsync(contentToTranslate, translated -> {
+            engine.translateAsyncDetailed(contentToTranslate, (translated, isFallback) -> {
                 if (client == null || client.gui == null || client.gui.getChat() == null) return;
 
                 client.execute(() -> {
                     if (translated != null && !translated.isBlank() && !translated.equalsIgnoreCase(contentToTranslate)) {
-                        Component translatedComp = buildInteractiveComponent(finalSender, langTag, dominantColor, translated, contentToTranslate, finalMention);
+                        Component translatedComp = buildInteractiveComponent(finalSender, langTag, dominantColor, translated, contentToTranslate, finalMention, isFallback);
                         client.gui.getChat().addMessage(translatedComp);
                     } else {
                         client.gui.getChat().addMessage(message);
@@ -302,11 +307,12 @@ public class ChatEventListener {
             });
         } else {
             // BELOW mode: let original show, add translated below with matching color
-            engine.translateAsync(contentToTranslate, translated -> {
+            engine.translateAsyncDetailed(contentToTranslate, (translated, isFallback) -> {
                 if (client == null || client.gui == null || client.gui.getChat() == null) return;
 
                 client.execute(() -> {
-                    Component translatedComp = Component.literal("  " + (finalMention ? "§6🔔 " : "") + langTag + dominantColor + translated);
+                    String actualTag = isFallback ? "§6[" + config.targetLanguage.toUpperCase() + "•FB] " : langTag;
+                    Component translatedComp = Component.literal("  " + (finalMention ? "§6🔔 " : "") + actualTag + dominantColor + translated);
                     client.gui.getChat().addMessage(translatedComp);
                 });
             });

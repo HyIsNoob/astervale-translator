@@ -33,6 +33,11 @@ public class TranslatorConfigScreen extends Screen {
     private Button openFolderButton;
     private Button clearCacheButton;
 
+    private Button engineModeButton;
+    private Button testApiKeyButton;
+    private EditBox apiKeyBox;
+    private String apiTestResult = "";
+
     private EditBox testInputBox;
     private Button testTranslateButton;
     private String testResult = "Type foreign text and click Test to verify translation";
@@ -49,7 +54,7 @@ public class TranslatorConfigScreen extends Screen {
         super.init();
 
         int centerX = this.width / 2;
-        int startY = 32;
+        int startY = 30;
         int btnWidth = 155;
         int btnHeight = 20;
 
@@ -175,10 +180,44 @@ public class TranslatorConfigScreen extends Screen {
           .tooltip(Tooltip.create(Component.literal("Wipe both memory and disk translation cache files to reset all stored translations.")))
           .build());
 
-        // Row 7: Live Translation Test Section
-        int testHeaderY = startY + 134;
-        int testInputY = testHeaderY + 13;
+        // Row 7: AI Engine Mode & Test API Button
+        int engineRowY = startY + 132;
+        engineModeButton = addRenderableWidget(Button.builder(getEngineModeButtonText(), btn -> {
+            config.toggleEngineMode();
+            btn.setMessage(getEngineModeButtonText());
+        }).bounds(centerX - 160, engineRowY, btnWidth, btnHeight)
+          .tooltip(Tooltip.create(Component.literal("Translate GG: Ultra-fast Google Web translation (~150ms), no key needed.\nGemini AI API: High-accuracy RPG AI translation, auto-fallbacks to Google if rate-limited.")))
+          .build());
 
+        testApiKeyButton = addRenderableWidget(Button.builder(Component.literal("Test API Key"), btn -> {
+            String key = apiKeyBox != null ? apiKeyBox.getValue() : config.geminiApiKey;
+            if (key == null || key.isBlank()) {
+                apiTestResult = "§cPlease enter your Gemini API Key below first!";
+                return;
+            }
+            apiTestResult = "§eTesting connection to Google AI Studio...";
+            engine.testGeminiApiKey(key, res -> {
+                if (minecraft != null) {
+                    minecraft.execute(() -> {
+                        apiTestResult = res;
+                    });
+                }
+            });
+        }).bounds(centerX + 5, engineRowY, btnWidth, btnHeight)
+          .tooltip(Tooltip.create(Component.literal("Verify your Gemini API key with a live test request to Google AI Studio.")))
+          .build());
+
+        // Row 8: Gemini API Key Input Box
+        int apiKeyY = startY + 154;
+        apiKeyBox = new EditBox(this.font, centerX - 160, apiKeyY, 320, 20, Component.literal("Gemini API Key"));
+        apiKeyBox.setMaxLength(128);
+        apiKeyBox.setValue(config.geminiApiKey != null ? config.geminiApiKey : "");
+        apiKeyBox.setHint(Component.literal("Paste your Gemini API Key from aistudio.google.com here"));
+        apiKeyBox.setResponder(val -> config.setGeminiApiKey(val));
+        addRenderableWidget(apiKeyBox);
+
+        // Row 9: Live Translation Test Section
+        int testInputY = startY + 192;
         testInputBox = new EditBox(this.font, centerX - 160, testInputY, 235, 20, Component.literal("Test Input"));
         testInputBox.setValue("안녕하세요! 상장폐지 위험이 있습니다.");
         addRenderableWidget(testInputBox);
@@ -198,11 +237,14 @@ public class TranslatorConfigScreen extends Screen {
                 }
             });
         }).bounds(centerX + 80, testInputY, 80, 20)
-          .tooltip(Tooltip.create(Component.literal("Send the text to Google Translate engine to test translation immediately.")))
+          .tooltip(Tooltip.create(Component.literal("Test live translation using the currently active engine.")))
           .build());
 
         // Done Button
         addRenderableWidget(Button.builder(Component.literal("Done"), btn -> {
+            if (apiKeyBox != null) {
+                config.setGeminiApiKey(apiKeyBox.getValue());
+            }
             config.save();
             if (this.minecraft != null) {
                 this.minecraft.setScreen(this.parentScreen);
@@ -258,6 +300,10 @@ public class TranslatorConfigScreen extends Screen {
         return Component.literal("Translate Self: " + (!config.ignoreSelfChat ? "§aON" : "§cOFF"));
     }
 
+    private Component getEngineModeButtonText() {
+        return Component.literal("Engine: " + (config.isGeminiMode() ? "§bGemini AI API" : "§aTranslate GG"));
+    }
+
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.render(graphics, mouseX, mouseY, partialTick);
@@ -265,16 +311,20 @@ public class TranslatorConfigScreen extends Screen {
         int centerX = this.width / 2;
 
         // Header Title & Subtitle
-        graphics.drawCenteredString(this.font, Component.literal("§6§lUNIVERSAL AUTO TRANSLATOR §7(1.21.4)"), centerX, 10, 0xFFFFFF);
-        graphics.drawCenteredString(this.font, Component.literal("§8Real-time Multilingual Chat & Item Tooltip Translation"), centerX, 22, 0x888888);
+        graphics.drawCenteredString(this.font, Component.literal("§6§lUNIVERSAL AUTO TRANSLATOR §7(1.21.4)"), centerX, 8, 0xFFFFFF);
+        graphics.drawCenteredString(this.font, Component.literal("§8Real-time Multilingual Chat & Item Tooltip Translation"), centerX, 19, 0x888888);
 
-        // Test Section Title
-        int testHeaderY = 166;
-        graphics.drawString(this.font, Component.literal("§eLive Translation Tester (Supports 100+ languages):"), centerX - 160, testHeaderY, 0xAAAAAA);
+        // API Status Message
+        if (!apiTestResult.isBlank()) {
+            graphics.drawString(this.font, Component.literal(apiTestResult), centerX - 160, 175, 0xFFFFFF);
+        }
 
-        // Result Line (Placed safely below the input box)
-        int resultY = testHeaderY + 36;
-        graphics.drawString(this.font, Component.literal("§7Result: §a" + testResult), centerX - 160, resultY, 0xFFFFFF);
+        // Live Test Header
+        int testInputY = 30 + 192;
+        graphics.drawString(this.font, Component.literal("§eLive Translation Tester:"), centerX - 160, testInputY - 11, 0xAAAAAA);
+
+        // Live Test Result Line
+        graphics.drawString(this.font, Component.literal("§7Result: §a" + testResult), centerX - 160, testInputY + 23, 0xFFFFFF);
 
         // Hint at bottom
         graphics.drawCenteredString(this.font, Component.literal("§8Tip: Press 'V' to configure | Type '!' or '//' in chat to bypass outgoing translation"), centerX, this.height - 36, 0x666666);
@@ -282,6 +332,9 @@ public class TranslatorConfigScreen extends Screen {
 
     @Override
     public void onClose() {
+        if (apiKeyBox != null) {
+            config.setGeminiApiKey(apiKeyBox.getValue());
+        }
         config.save();
         if (this.minecraft != null) {
             this.minecraft.setScreen(this.parentScreen);

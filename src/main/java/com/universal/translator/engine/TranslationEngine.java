@@ -2,6 +2,7 @@ package com.universal.translator.engine;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.universal.translator.config.TranslatorConfig;
 import org.slf4j.Logger;
@@ -15,6 +16,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.concurrent.*;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
@@ -100,10 +102,20 @@ public class TranslationEngine {
         return CJK_CYRILLIC_PATTERN.matcher(clean).find();
     }
 
+    public static class TranslationOutcome {
+        public final String text;
+        public final boolean isFallback;
+
+        public TranslationOutcome(String text, boolean isFallback) {
+            this.text = text;
+            this.isFallback = isFallback;
+        }
+    }
+
     /**
-     * Asynchronously translates the given text and invokes callback with result.
+     * Asynchronously translates the given text and invokes callback with result and fallback status.
      */
-    public void translateAsync(String rawText, Consumer<String> callback) {
+    public void translateAsyncDetailed(String rawText, BiConsumer<String, Boolean> callback) {
         if (!config.masterEnabled || rawText == null || rawText.isBlank() || !needsTranslation(rawText)) {
             return;
         }
@@ -111,21 +123,21 @@ public class TranslationEngine {
         String trimmed = rawText.trim();
         String cached = cache.get(trimmed);
         if (cached != null) {
-            callback.accept(cached);
+            callback.accept(cached, false);
             return;
         }
 
-        // Deduplicate in-flight requests: if already being translated, don't spam duplicate tasks
+        // Deduplicate in-flight requests
         if (!inFlightRequests.add(trimmed)) {
             return;
         }
 
         executor.submit(() -> {
             try {
-                String translated = translateSync(trimmed);
-                if (translated != null && !translated.isBlank() && !translated.equalsIgnoreCase(trimmed)) {
-                    cache.put(trimmed, translated);
-                    callback.accept(translated);
+                TranslationOutcome outcome = translateSyncWithOutcome(trimmed);
+                if (outcome != null && outcome.text != null && !outcome.text.isBlank() && !outcome.text.equalsIgnoreCase(trimmed)) {
+                    cache.put(trimmed, outcome.text);
+                    callback.accept(outcome.text, outcome.isFallback);
                 }
             } catch (Exception e) {
                 LOGGER.debug("Async translation error for '{}': {}", trimmed, e.getMessage());
@@ -133,6 +145,13 @@ public class TranslationEngine {
                 inFlightRequests.remove(trimmed);
             }
         });
+    }
+
+    /**
+     * Asynchronously translates the given text and invokes callback with result.
+     */
+    public void translateAsync(String rawText, Consumer<String> callback) {
+        translateAsyncDetailed(rawText, (translated, isFallback) -> callback.accept(translated));
     }
 
     /**
@@ -146,7 +165,8 @@ public class TranslationEngine {
         String trimmed = rawText.trim();
         executor.submit(() -> {
             try {
-                String translated = translateSync(trimmed);
+                TranslationOutcome outcome = translateSyncWithOutcome(trimmed);
+                String translated = outcome.text;
                 callback.accept(translated != null && !translated.isBlank() ? translated : trimmed);
             } catch (Exception e) {
                 callback.accept("Translation error: " + e.getMessage());
@@ -155,30 +175,38 @@ public class TranslationEngine {
     }
 
     /**
-     * Synchronous translation call (Primary: Google Mobile HTML, Secondary: Google GTX, Tertiary: MyMemory, Fallback: Lexicon).
+     * Synchronous translation call returning TranslationOutcome (includes isFallback flag).
      */
-    public String translateSync(String text) {
+    public TranslationOutcome translateSyncWithOutcome(String text) {
         String sl = config.sourceLanguage != null ? config.sourceLanguage : "auto";
         String tl = config.targetLanguage != null ? config.targetLanguage : "vi";
-        return translateSyncTarget(text, sl, tl);
+        return translateSyncTargetWithOutcome(text, sl, tl);
+    }
+
+    public String translateSync(String text) {
+        return translateSyncWithOutcome(text).text;
+    }
+
+    public String translateSyncTarget(String text, String sl, String tl) {
+        return translateSyncTargetWithOutcome(text, sl, tl).text;
     }
 
     /**
      * Synchronous translation call for any source and target language pair.
      */
-    public String translateSyncTarget(String text, String sl, String tl) {
-        if (text == null || text.isBlank()) return text;
+    public TranslationOutcome translateSyncTargetWithOutcome(String text, String sl, String tl) {
+        if (text == null || text.isBlank()) return new TranslationOutcome(text, false);
         String clean = text.trim();
 
         // 1. Check Cache
         String cacheKey = "[" + tl + "]" + clean;
         String cached = cache.get(cacheKey);
-        if (cached != null) return cached;
+        if (cached != null) return new TranslationOutcome(cached, false);
 
         // Also check un-prefixed cache if target matches default
         if (tl.equalsIgnoreCase(config.targetLanguage)) {
             String defaultCached = cache.get(clean);
-            if (defaultCached != null) return defaultCached;
+            if (defaultCached != null) return new TranslationOutcome(defaultCached, false);
         }
 
         // 2. Check exact match in custom lexicon (if translating to Vietnamese)
@@ -187,24 +215,43 @@ public class TranslationEngine {
             if (exactLexicon != null) {
                 cache.put(cacheKey, exactLexicon);
                 cache.put(clean, exactLexicon);
-                return exactLexicon;
+                return new TranslationOutcome(exactLexicon, false);
             }
         }
 
-        // 3. Primary: Google Mobile Web Engine (High reliability, bypasses 429 rate limit)
-        String translated = queryGoogleMobile(clean, sl, tl);
+        boolean isFallback = false;
+        String translated = null;
 
-        // 4. Secondary: Google GTX API
+        // 3. Primary AI Option: Google Gemini API (if enabled in config)
+        if (config.isGeminiMode()) {
+            if (config.geminiApiKey != null && !config.geminiApiKey.isBlank()) {
+                try {
+                    translated = queryGemini(clean, tl, config.geminiApiKey.trim());
+                } catch (Exception e) {
+                    LOGGER.warn("Gemini API failed for '{}': {}. Falling back to Google Translate.", clean, e.getMessage());
+                    isFallback = true;
+                }
+            } else {
+                isFallback = true;
+            }
+        }
+
+        // 4. Primary Web / Fallback: Google Mobile Web Engine (High reliability, bypasses 429 rate limit)
+        if (translated == null || translated.isBlank()) {
+            translated = queryGoogleMobile(clean, sl, tl);
+        }
+
+        // 5. Secondary: Google GTX API
         if (translated == null || translated.isBlank()) {
             translated = queryGoogleGtx(clean, sl, tl);
         }
 
-        // 5. Tertiary: MyMemory API
+        // 6. Tertiary: MyMemory API
         if (translated == null || translated.isBlank()) {
             translated = queryMyMemory(clean, sl, tl);
         }
 
-        // 6. Offline Fallback: Custom Lexicon replacement
+        // 7. Offline Fallback: Custom Lexicon replacement
         if (translated == null || translated.isBlank()) {
             if ("vi".equalsIgnoreCase(tl)) {
                 String fallbackLexicon = lexicon.applyPreprocess(clean);
@@ -219,10 +266,10 @@ public class TranslationEngine {
             if (tl.equalsIgnoreCase(config.targetLanguage)) {
                 cache.put(clean, translated);
             }
-            return translated;
+            return new TranslationOutcome(translated, isFallback);
         }
 
-        return clean;
+        return new TranslationOutcome(clean, isFallback);
     }
 
     private static final Pattern RESULT_CONTAINER_PATTERN = Pattern.compile("(?s)<div[^>]*class=\"result-container\"[^>]*>(.*?)</div>");
@@ -371,6 +418,102 @@ public class TranslationEngine {
             LOGGER.warn("Failed to parse Google Translate response: {}", e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Query Google Gemini REST API directly with RPG gaming prompt.
+     */
+    public String queryGemini(String text, String tl, String apiKey) throws Exception {
+        String targetLangName = "Vietnamese";
+        try {
+            targetLangName = com.universal.translator.config.SupportedLanguage.fromCode(tl).getEnglishName();
+        } catch (Exception ignored) {}
+
+        String model = config.geminiModel != null && !config.geminiModel.isBlank() ? config.geminiModel.trim() : "gemini-1.5-flash";
+        String url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + apiKey;
+
+        JsonObject root = new JsonObject();
+        JsonArray contents = new JsonArray();
+        JsonObject contentObj = new JsonObject();
+        JsonArray parts = new JsonArray();
+        JsonObject part = new JsonObject();
+
+        String prompt = "You are a professional game translator. Translate the following Minecraft chat message, item lore, or NPC dialogue accurately into "
+                + targetLangName + " using natural gaming and RPG terminology. "
+                + "Do NOT add any notes, explanations, or conversational filler. Output ONLY the raw translated text.\n\nText: " + text;
+
+        part.addProperty("text", prompt);
+        parts.add(part);
+        contentObj.add("parts", parts);
+        contents.add(contentObj);
+        root.add("contents", contents);
+
+        JsonObject genConfig = new JsonObject();
+        genConfig.addProperty("temperature", 0.1);
+        genConfig.addProperty("maxOutputTokens", 300);
+        root.add("generationConfig", genConfig);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .timeout(Duration.ofMillis(2500))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(root.toString(), StandardCharsets.UTF_8))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        if (response.statusCode() != 200) {
+            throw new RuntimeException("HTTP " + response.statusCode() + " " + response.body());
+        }
+
+        JsonObject resObj = JsonParser.parseString(response.body()).getAsJsonObject();
+        JsonArray candidates = resObj.getAsJsonArray("candidates");
+        if (candidates != null && !candidates.isEmpty()) {
+            JsonObject cand = candidates.get(0).getAsJsonObject();
+            JsonObject candContent = cand.getAsJsonObject("content");
+            if (candContent != null) {
+                JsonArray candParts = candContent.getAsJsonArray("parts");
+                if (candParts != null && !candParts.isEmpty()) {
+                    String out = candParts.get(0).getAsJsonObject().get("text").getAsString().trim();
+                    if (out.startsWith("\"") && out.endsWith("\"") && out.length() >= 2) {
+                        out = out.substring(1, out.length() - 1).trim();
+                    }
+                    return out;
+                }
+            }
+        }
+
+        throw new RuntimeException("No translation candidate in Gemini response");
+    }
+
+    /**
+     * Tests a Gemini API Key on a background thread and invokes callback with result.
+     */
+    public void testGeminiApiKey(String apiKey, Consumer<String> callback) {
+        if (apiKey == null || apiKey.isBlank()) {
+            callback.accept("§cAPI Key cannot be empty!");
+            return;
+        }
+
+        executor.submit(() -> {
+            try {
+                String testPhrase = "안녕하세요! 반갑습니다.";
+                String translated = queryGemini(testPhrase, "vi", apiKey.trim());
+                if (translated != null && !translated.isBlank()) {
+                    callback.accept("§a✔ API Valid! Result: §f" + translated);
+                } else {
+                    callback.accept("§c✖ Empty translation response from Gemini");
+                }
+            } catch (Exception e) {
+                String msg = e.getMessage();
+                if (msg != null && msg.contains("API_KEY_INVALID")) {
+                    callback.accept("§c✖ Invalid API Key! Check your key on Google AI Studio.");
+                } else if (msg != null && msg.contains("429")) {
+                    callback.accept("§c✖ Quota Exceeded (HTTP 429)! Rate limit reached.");
+                } else {
+                    callback.accept("§c✖ " + (msg != null && msg.length() > 60 ? msg.substring(0, 60) + "..." : msg));
+                }
+            }
+        });
     }
 
     public TranslationCache getCache() {
