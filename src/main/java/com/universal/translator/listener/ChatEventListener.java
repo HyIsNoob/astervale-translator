@@ -22,7 +22,7 @@ public class ChatEventListener {
 
     // Regex to match Minecraft player chat prefixes: [Rank] [Title] <Player>, Player:
     private static final Pattern PLAYER_PATTERN = Pattern.compile(
-            "^(?<sender>(?:\\[[^\\]]+\\]\\s*)*(?:<[a-zA-Z0-9_\\uAC00-\\uD7A3]{1,20}>\\s*:?\\s*|[a-zA-Z0-9_\\uAC00-\\uD7A3]{2,20}:\\s+))(?<content>.+)$"
+            "^(?<sender>.*?(?:<[a-zA-Z0-9_\\uAC00-\\uD7A3]{1,20}>|[a-zA-Z0-9_\\uAC00-\\uD7A3\\s]{2,20}:)\\s*)(?<content>.+)$"
     );
 
     // Regex to match custom NPC dialogue formats: [NPC] Name: text, Name » text, 【Name】text, ★ Name ★ : text, Name > text
@@ -190,9 +190,10 @@ public class ChatEventListener {
     /**
      * Builds interactive translated component with hover-to-view-original and click-to-copy.
      */
-    private Component buildInteractiveComponent(String prefix, String langTag, String dominantColor, String translatedText, String originalText, boolean isMention, boolean isFallback) {
-        String tag = isFallback ? "§6[" + config.targetLanguage.toUpperCase() + "•FB] " : langTag;
-        String fullText = (isMention ? "§6§l🔔 §r" : "") + prefix + tag + dominantColor + translatedText;
+    private Component buildInteractiveComponent(String prefix, String dominantColor, String translatedText, String originalText, boolean isMention, boolean isFallback) {
+        String fbTag = (isFallback && config.showFallbackNotice) ? "§6[FB] " : "";
+        String mention = isMention ? "§6§l🔔 §r" : "";
+        String fullText = mention + fbTag + prefix + dominantColor + translatedText;
         MutableComponent comp = Component.literal(fullText);
 
         if (originalText != null && !originalText.isBlank()) {
@@ -277,7 +278,7 @@ public class ChatEventListener {
         String cached = engine.getCache().get(contentToTranslate);
         if (cached != null && !cached.isBlank()) {
             if (config.chatReplaceMode) {
-                Component translatedComp = buildInteractiveComponent(finalSender, langTag, dominantColor, cached, contentToTranslate, finalMention, false);
+                Component translatedComp = buildInteractiveComponent(finalSender, dominantColor, cached, contentToTranslate, finalMention, false);
                 event.setMessage(translatedComp);
             } else {
                 if (client != null && client.gui != null && client.gui.getChat() != null) {
@@ -298,7 +299,7 @@ public class ChatEventListener {
 
                 client.execute(() -> {
                     if (translated != null && !translated.isBlank() && !translated.equalsIgnoreCase(contentToTranslate)) {
-                        Component translatedComp = buildInteractiveComponent(finalSender, langTag, dominantColor, translated, contentToTranslate, finalMention, isFallback);
+                        Component translatedComp = buildInteractiveComponent(finalSender, dominantColor, translated, contentToTranslate, finalMention, isFallback);
                         client.gui.getChat().addMessage(translatedComp);
                     } else {
                         client.gui.getChat().addMessage(message);
@@ -311,7 +312,7 @@ public class ChatEventListener {
                 if (client == null || client.gui == null || client.gui.getChat() == null) return;
 
                 client.execute(() -> {
-                    String actualTag = isFallback ? "§6[" + config.targetLanguage.toUpperCase() + "•FB] " : langTag;
+                    String actualTag = (isFallback && config.showFallbackNotice) ? "§6[" + config.targetLanguage.toUpperCase() + "•FB] " : langTag;
                     Component translatedComp = Component.literal("  " + (finalMention ? "§6🔔 " : "") + actualTag + dominantColor + translated);
                     client.gui.getChat().addMessage(translatedComp);
                 });

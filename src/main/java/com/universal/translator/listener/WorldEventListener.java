@@ -60,30 +60,6 @@ public class WorldEventListener {
     }
 
     /**
-     * Translates NPC nametags rendered above entities in the world (e.g. "[상인] 대장장이", "Lv.50 사막 도적").
-     */
-    @SubscribeEvent
-    public void onRenderNameTag(RenderNameTagEvent.DoRender event) {
-        if (!config.masterEnabled) return;
-
-        EntityRenderState state = event.getEntityRenderState();
-        if (state == null || state.nameTag == null) return;
-
-        String rawName = state.nameTag.getString();
-        if (rawName.isBlank() || !engine.needsTranslation(rawName)) return;
-
-        String cached = engine.getCache().get(rawName.trim());
-        if (cached != null && !cached.isBlank()) {
-            state.nameTag = Component.literal(cached);
-        } else {
-            // Trigger async fetch into cache for subsequent frames
-            engine.translateAsync(rawName.trim(), translated -> {
-                // Cached result will be picked up on next render frame
-            });
-        }
-    }
-
-    /**
      * Translates GUI overlay layers: Center-Screen Titles/Subtitles and Scoreboard Sidebar.
      */
     @SubscribeEvent
