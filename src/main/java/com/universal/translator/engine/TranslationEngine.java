@@ -429,7 +429,11 @@ public class TranslationEngine {
             targetLangName = com.universal.translator.config.SupportedLanguage.fromCode(tl).getEnglishName();
         } catch (Exception ignored) {}
 
-        String model = config.geminiModel != null && !config.geminiModel.isBlank() ? config.geminiModel.trim() : "gemini-1.5-flash";
+        String rawModel = config.getGeminiModel();
+        String model = (rawModel != null && !rawModel.isBlank()) ? rawModel.trim() : "gemini-flash-lite-latest";
+        if (model.startsWith("models/")) {
+            model = model.substring("models/".length());
+        }
         String url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + apiKey;
 
         JsonObject root = new JsonObject();
@@ -455,7 +459,7 @@ public class TranslationEngine {
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
-                .timeout(Duration.ofMillis(2500))
+                .timeout(Duration.ofMillis(5000))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(root.toString(), StandardCharsets.UTF_8))
                 .build();
@@ -499,16 +503,20 @@ public class TranslationEngine {
                 String testPhrase = "안녕하세요! 반갑습니다.";
                 String translated = queryGemini(testPhrase, "vi", apiKey.trim());
                 if (translated != null && !translated.isBlank()) {
-                    callback.accept("§a✔ API Valid! Result: §f" + translated);
+                    callback.accept("§a✔ API Valid! (" + config.getGeminiModel() + "): §f" + translated);
                 } else {
                     callback.accept("§c✖ Empty translation response from Gemini");
                 }
             } catch (Exception e) {
                 String msg = e.getMessage();
-                if (msg != null && msg.contains("API_KEY_INVALID")) {
+                if (msg != null && msg.contains("404")) {
+                    callback.accept("§c✖ HTTP 404: Model '" + config.getGeminiModel() + "' not found! Check Model List.");
+                } else if (msg != null && msg.contains("API_KEY_INVALID")) {
                     callback.accept("§c✖ Invalid API Key! Check your key on Google AI Studio.");
                 } else if (msg != null && msg.contains("429")) {
                     callback.accept("§c✖ Quota Exceeded (HTTP 429)! Rate limit reached.");
+                } else if (msg != null && msg.contains("503")) {
+                    callback.accept("§e⚠ HTTP 503: High demand spike. Try gemini-flash-lite-latest.");
                 } else {
                     callback.accept("§c✖ " + (msg != null && msg.length() > 60 ? msg.substring(0, 60) + "..." : msg));
                 }

@@ -51,7 +51,7 @@ public class TranslatorConfig {
     // AI Engine Configuration
     public String engineMode = "GOOGLE_WEB"; // "GOOGLE_WEB" or "GEMINI_API"
     public String geminiApiKey = "";
-    public String geminiModel = "gemini-1.5-flash";
+    public String geminiModel = "gemini-flash-lite-latest";
     public boolean showFallbackNotice = true;
 
     private transient Path configFile;
@@ -112,7 +112,18 @@ public class TranslatorConfig {
                 this.translateAllForeignText = loaded.translateAllForeignText;
                 this.engineMode = loaded.engineMode != null ? loaded.engineMode : this.engineMode;
                 this.geminiApiKey = loaded.geminiApiKey != null ? loaded.geminiApiKey : this.geminiApiKey;
-                this.geminiModel = loaded.geminiModel != null ? loaded.geminiModel : this.geminiModel;
+                
+                // Auto-migrate retired 404 models
+                String m = loaded.geminiModel != null ? loaded.geminiModel.trim() : "";
+                if (m.isBlank() || "gemini-1.5-flash".equalsIgnoreCase(m) || "gemini-2.5-flash".equalsIgnoreCase(m) || "gemini-2.5-flash-lite".equalsIgnoreCase(m)) {
+                    this.geminiModel = "gemini-flash-lite-latest";
+                } else {
+                    if (m.startsWith("models/")) {
+                        m = m.substring("models/".length());
+                    }
+                    this.geminiModel = m;
+                }
+                
                 this.showFallbackNotice = loaded.showFallbackNotice;
             }
         } catch (Exception e) {
@@ -131,6 +142,30 @@ public class TranslatorConfig {
 
     public void setGeminiApiKey(String key) {
         this.geminiApiKey = key != null ? key.trim() : "";
+        save();
+    }
+
+    public String getGeminiModel() {
+        if (geminiModel == null || geminiModel.isBlank()) {
+            return "gemini-flash-lite-latest";
+        }
+        String m = geminiModel.trim();
+        if (m.startsWith("models/")) {
+            m = m.substring("models/".length());
+        }
+        return m;
+    }
+
+    public void setGeminiModel(String model) {
+        if (model != null && !model.isBlank()) {
+            String m = model.trim();
+            if (m.startsWith("models/")) {
+                m = m.substring("models/".length());
+            }
+            this.geminiModel = m;
+        } else {
+            this.geminiModel = "gemini-flash-lite-latest";
+        }
         save();
     }
 

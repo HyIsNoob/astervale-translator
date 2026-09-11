@@ -36,11 +36,9 @@ public class TranslatorConfigScreen extends Screen {
     private Button engineModeButton;
     private Button testApiKeyButton;
     private EditBox apiKeyBox;
+    private EditBox modelBox;
+    private Button modelDocsButton;
     private String apiTestResult = "";
-
-    private EditBox testInputBox;
-    private Button testTranslateButton;
-    private String testResult = "Type foreign text and click Test to verify translation";
 
     public TranslatorConfigScreen(Screen parentScreen) {
         super(Component.literal("Universal Auto Translator Config"));
@@ -164,7 +162,7 @@ public class TranslatorConfigScreen extends Screen {
                 Path configDir = net.neoforged.fml.loading.FMLPaths.CONFIGDIR.get();
                 net.minecraft.Util.getPlatform().openPath(configDir);
             } catch (Exception e) {
-                testResult = "Error opening folder: " + e.getMessage();
+                apiTestResult = "§cError opening folder: " + e.getMessage();
             }
         }).bounds(centerX + 5, startY + 110, 75, btnHeight)
           .tooltip(Tooltip.create(Component.literal("Open the Minecraft config directory to view or edit custom lexicon files.")))
@@ -174,7 +172,7 @@ public class TranslatorConfigScreen extends Screen {
             if (engine != null && engine.getCache() != null) {
                 int count = engine.getCache().size();
                 engine.getCache().clear();
-                testResult = "Cache wiped (" + count + " items reset).";
+                apiTestResult = "§aCache wiped (" + count + " items reset).";
             }
         }).bounds(centerX + 85, startY + 110, 75, btnHeight)
           .tooltip(Tooltip.create(Component.literal("Wipe both memory and disk translation cache files to reset all stored translations.")))
@@ -190,12 +188,15 @@ public class TranslatorConfigScreen extends Screen {
           .build());
 
         testApiKeyButton = addRenderableWidget(Button.builder(Component.literal("Test API Key"), btn -> {
-            String key = apiKeyBox != null ? apiKeyBox.getValue() : config.geminiApiKey;
-            if (key == null || key.isBlank()) {
+            String key = apiKeyBox != null ? apiKeyBox.getValue().trim() : config.geminiApiKey;
+            String model = modelBox != null ? modelBox.getValue().trim() : config.getGeminiModel();
+            config.setGeminiApiKey(key);
+            config.setGeminiModel(model);
+            if (key.isBlank()) {
                 apiTestResult = "§cPlease enter your Gemini API Key below first!";
                 return;
             }
-            apiTestResult = "§eTesting connection to Google AI Studio...";
+            apiTestResult = "§eTesting connection (" + config.getGeminiModel() + ")...";
             engine.testGeminiApiKey(key, res -> {
                 if (minecraft != null) {
                     minecraft.execute(() -> {
@@ -204,7 +205,7 @@ public class TranslatorConfigScreen extends Screen {
                 }
             });
         }).bounds(centerX + 5, engineRowY, btnWidth, btnHeight)
-          .tooltip(Tooltip.create(Component.literal("Verify your Gemini API key with a live test request to Google AI Studio.")))
+          .tooltip(Tooltip.create(Component.literal("Verify your Gemini API key and model with a live test request.")))
           .build());
 
         // Row 8: Gemini API Key Input Box
@@ -212,38 +213,36 @@ public class TranslatorConfigScreen extends Screen {
         apiKeyBox = new EditBox(this.font, centerX - 160, apiKeyY, 320, 20, Component.literal("Gemini API Key"));
         apiKeyBox.setMaxLength(128);
         apiKeyBox.setValue(config.geminiApiKey != null ? config.geminiApiKey : "");
-        apiKeyBox.setHint(Component.literal("Paste your Gemini API Key from aistudio.google.com here"));
+        apiKeyBox.setHint(Component.literal("Paste your Gemini API Key from aistudio.google.com"));
         apiKeyBox.setResponder(val -> config.setGeminiApiKey(val));
         addRenderableWidget(apiKeyBox);
 
-        // Row 9: Live Translation Test Section
-        int testInputY = startY + 192;
-        testInputBox = new EditBox(this.font, centerX - 160, testInputY, 235, 20, Component.literal("Test Input"));
-        testInputBox.setValue("안녕하세요! 상장폐지 위험이 있습니다.");
-        addRenderableWidget(testInputBox);
+        // Row 9: Gemini Model Name Input Box & Model Docs Button
+        int modelRowY = startY + 178;
+        modelBox = new EditBox(this.font, centerX - 160, modelRowY, 205, 20, Component.literal("Gemini Model"));
+        modelBox.setMaxLength(64);
+        modelBox.setValue(config.getGeminiModel());
+        modelBox.setHint(Component.literal("Model: e.g. gemini-flash-lite-latest"));
+        modelBox.setResponder(val -> config.setGeminiModel(val));
+        addRenderableWidget(modelBox);
 
-        testTranslateButton = addRenderableWidget(Button.builder(Component.literal("Test"), btn -> {
-            String input = testInputBox.getValue();
-            if (input == null || input.isBlank()) {
-                testResult = "Please enter text to translate!";
-                return;
+        modelDocsButton = addRenderableWidget(Button.builder(Component.literal("Model List ↗"), btn -> {
+            try {
+                net.minecraft.Util.getPlatform().openUri(new java.net.URI("https://ai.google.dev/gemini-api/docs/models/gemini"));
+            } catch (Exception e) {
+                apiTestResult = "§cCould not open browser: " + e.getMessage();
             }
-            testResult = "Translating into " + config.getSupportedLanguage().getEnglishName() + "...";
-            engine.translateDirectAsync(input, res -> {
-                if (minecraft != null) {
-                    minecraft.execute(() -> {
-                        testResult = res;
-                    });
-                }
-            });
-        }).bounds(centerX + 80, testInputY, 80, 20)
-          .tooltip(Tooltip.create(Component.literal("Test live translation using the currently active engine.")))
+        }).bounds(centerX + 50, modelRowY, 110, 20)
+          .tooltip(Tooltip.create(Component.literal("Open official Google Gemini models page in browser to find model names.")))
           .build());
 
         // Done Button
         addRenderableWidget(Button.builder(Component.literal("Done"), btn -> {
             if (apiKeyBox != null) {
                 config.setGeminiApiKey(apiKeyBox.getValue());
+            }
+            if (modelBox != null) {
+                config.setGeminiModel(modelBox.getValue());
             }
             config.save();
             if (this.minecraft != null) {
@@ -314,17 +313,13 @@ public class TranslatorConfigScreen extends Screen {
         graphics.drawCenteredString(this.font, Component.literal("§6§lUNIVERSAL AUTO TRANSLATOR §7(1.21.4)"), centerX, 8, 0xFFFFFF);
         graphics.drawCenteredString(this.font, Component.literal("§8Real-time Multilingual Chat & Item Tooltip Translation"), centerX, 19, 0x888888);
 
-        // API Status Message
+        // API Status Message / Hint
+        int statusY = 30 + 204;
         if (!apiTestResult.isBlank()) {
-            graphics.drawString(this.font, Component.literal(apiTestResult), centerX - 160, 175, 0xFFFFFF);
+            graphics.drawString(this.font, Component.literal(apiTestResult), centerX - 160, statusY, 0xFFFFFF);
+        } else {
+            graphics.drawString(this.font, Component.literal("§8Default: §7gemini-flash-lite-latest §8| Free, fast, high quota. Click 'Model List ↗' for docs."), centerX - 160, statusY, 0x888888);
         }
-
-        // Live Test Header
-        int testInputY = 30 + 192;
-        graphics.drawString(this.font, Component.literal("§eLive Translation Tester:"), centerX - 160, testInputY - 11, 0xAAAAAA);
-
-        // Live Test Result Line
-        graphics.drawString(this.font, Component.literal("§7Result: §a" + testResult), centerX - 160, testInputY + 23, 0xFFFFFF);
 
         // Hint at bottom
         graphics.drawCenteredString(this.font, Component.literal("§8Tip: Press 'V' to configure | Type '!' or '//' in chat to bypass outgoing translation"), centerX, this.height - 36, 0x666666);
@@ -334,6 +329,9 @@ public class TranslatorConfigScreen extends Screen {
     public void onClose() {
         if (apiKeyBox != null) {
             config.setGeminiApiKey(apiKeyBox.getValue());
+        }
+        if (modelBox != null) {
+            config.setGeminiModel(modelBox.getValue());
         }
         config.save();
         if (this.minecraft != null) {
