@@ -424,13 +424,17 @@ public class TranslationEngine {
      * Query Google Gemini REST API directly with RPG gaming prompt.
      */
     public String queryGemini(String text, String tl, String apiKey) throws Exception {
+        return queryGemini(text, tl, apiKey, 5000);
+    }
+
+    public String queryGemini(String text, String tl, String apiKey, int timeoutMs) throws Exception {
         String targetLangName = "Vietnamese";
         try {
             targetLangName = com.universal.translator.config.SupportedLanguage.fromCode(tl).getEnglishName();
         } catch (Exception ignored) {}
 
         String rawModel = config.getGeminiModel();
-        String model = (rawModel != null && !rawModel.isBlank()) ? rawModel.trim() : "gemini-flash-lite-latest";
+        String model = (rawModel != null && !rawModel.isBlank()) ? rawModel.trim() : "gemini-3.5-flash-lite";
         if (model.startsWith("models/")) {
             model = model.substring("models/".length());
         }
@@ -459,7 +463,7 @@ public class TranslationEngine {
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
-                .timeout(Duration.ofMillis(5000))
+                .timeout(Duration.ofMillis(timeoutMs))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(root.toString(), StandardCharsets.UTF_8))
                 .build();
@@ -501,7 +505,7 @@ public class TranslationEngine {
         executor.submit(() -> {
             try {
                 String testPhrase = "안녕하세요! 반갑습니다.";
-                String translated = queryGemini(testPhrase, "vi", apiKey.trim());
+                String translated = queryGemini(testPhrase, "vi", apiKey.trim(), 12000);
                 if (translated != null && !translated.isBlank()) {
                     callback.accept("§a✔ API Valid! (" + config.getGeminiModel() + "): §f" + translated);
                 } else {
@@ -509,14 +513,16 @@ public class TranslationEngine {
                 }
             } catch (Exception e) {
                 String msg = e.getMessage();
-                if (msg != null && msg.contains("404")) {
+                if (msg != null && (msg.contains("timeout") || msg.contains("timed out") || msg.contains("Timeout"))) {
+                    callback.accept("§c✖ Timed Out! Model is slow/busy. Recommend: 'gemini-3.5-flash-lite'.");
+                } else if (msg != null && msg.contains("404")) {
                     callback.accept("§c✖ HTTP 404: Model '" + config.getGeminiModel() + "' not found! Check Model List.");
                 } else if (msg != null && msg.contains("API_KEY_INVALID")) {
                     callback.accept("§c✖ Invalid API Key! Check your key on Google AI Studio.");
                 } else if (msg != null && msg.contains("429")) {
-                    callback.accept("§c✖ Quota Exceeded (HTTP 429)! Rate limit reached.");
+                    callback.accept("§c✖ Quota Exceeded (HTTP 429)! Limit: 20 RPD on standard models.");
                 } else if (msg != null && msg.contains("503")) {
-                    callback.accept("§e⚠ HTTP 503: High demand spike. Try gemini-flash-lite-latest.");
+                    callback.accept("§e⚠ HTTP 503: High demand spike. Try gemini-3.5-flash-lite.");
                 } else {
                     callback.accept("§c✖ " + (msg != null && msg.length() > 60 ? msg.substring(0, 60) + "..." : msg));
                 }

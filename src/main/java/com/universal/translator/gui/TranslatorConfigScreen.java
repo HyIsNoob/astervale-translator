@@ -222,7 +222,7 @@ public class TranslatorConfigScreen extends Screen {
         modelBox = new EditBox(this.font, centerX - 160, modelRowY, 205, 20, Component.literal("Gemini Model"));
         modelBox.setMaxLength(64);
         modelBox.setValue(config.getGeminiModel());
-        modelBox.setHint(Component.literal("Model: e.g. gemini-flash-lite-latest"));
+        modelBox.setHint(Component.literal("Model: e.g. gemini-3.5-flash-lite"));
         modelBox.setResponder(val -> config.setGeminiModel(val));
         addRenderableWidget(modelBox);
 
@@ -318,7 +318,7 @@ public class TranslatorConfigScreen extends Screen {
         if (!apiTestResult.isBlank()) {
             graphics.drawString(this.font, Component.literal(apiTestResult), centerX - 160, statusY, 0xFFFFFF);
         } else {
-            graphics.drawString(this.font, Component.literal("§8Default: §7gemini-flash-lite-latest §8| Free, fast, high quota. Click 'Model List ↗' for docs."), centerX - 160, statusY, 0x888888);
+            graphics.drawString(this.font, Component.literal("§8Default: §7gemini-3.5-flash-lite §8(500 RPD, fast). Click 'Model List ↗' for docs."), centerX - 160, statusY, 0x888888);
         }
 
         // Hint at bottom

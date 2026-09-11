@@ -51,7 +51,7 @@ public class TranslatorConfig {
     // AI Engine Configuration
     public String engineMode = "GOOGLE_WEB"; // "GOOGLE_WEB" or "GEMINI_API"
     public String geminiApiKey = "";
-    public String geminiModel = "gemini-flash-lite-latest";
+    public String geminiModel = "gemini-3.5-flash-lite";
     public boolean showFallbackNotice = true;
 
     private transient Path configFile;
@@ -116,7 +116,7 @@ public class TranslatorConfig {
                 // Auto-migrate retired 404 models
                 String m = loaded.geminiModel != null ? loaded.geminiModel.trim() : "";
                 if (m.isBlank() || "gemini-1.5-flash".equalsIgnoreCase(m) || "gemini-2.5-flash".equalsIgnoreCase(m) || "gemini-2.5-flash-lite".equalsIgnoreCase(m)) {
-                    this.geminiModel = "gemini-flash-lite-latest";
+                    this.geminiModel = "gemini-3.5-flash-lite";
                 } else {
                     if (m.startsWith("models/")) {
                         m = m.substring("models/".length());
@@ -147,7 +147,7 @@ public class TranslatorConfig {
 
     public String getGeminiModel() {
         if (geminiModel == null || geminiModel.isBlank()) {
-            return "gemini-flash-lite-latest";
+            return "gemini-3.5-flash-lite";
         }
         String m = geminiModel.trim();
         if (m.startsWith("models/")) {
@@ -164,7 +164,7 @@ public class TranslatorConfig {
             }
             this.geminiModel = m;
         } else {
-            this.geminiModel = "gemini-flash-lite-latest";
+            this.geminiModel = "gemini-3.5-flash-lite";
         }
         save();
     }
